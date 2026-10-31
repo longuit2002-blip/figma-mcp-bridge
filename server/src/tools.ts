@@ -1082,7 +1082,8 @@ async function renderTreeResponse(fn: () => Promise<BridgeResponse>): Promise<To
 /**
  * Converts the plugin's screenshot exports into MCP content blocks: a metadata
  * text block per export followed by an image block for JPG/PNG or the markup
- * for SVG. PDF has no MCP image type, so it keeps the base64-in-JSON form.
+ * for SVG. PDF has no MCP image type, so a PDF response keeps the exact
+ * `{exports: [...]}` JSON the plugin returned.
  * @param fn - Bridge call to execute.
  * @param verbose - When true, return the raw JSON payload exactly as before.
  * @returns Tool result with content blocks or an error message.
@@ -1097,7 +1098,7 @@ async function renderScreenshotResponse(
       return { content: [{ type: "text", text: resp.error }], isError: true };
     }
     const exports = (resp.data as { exports?: ScreenshotExport[] } | undefined)?.exports;
-    if (verbose || !Array.isArray(exports)) {
+    if (verbose || !Array.isArray(exports) || exports.every(isPdfExport)) {
       return { content: [{ type: "text", text: JSON.stringify(resp.data) }] };
     }
     return { content: exports.flatMap(toScreenshotContent) };
@@ -1108,6 +1109,8 @@ async function renderScreenshotResponse(
     };
   }
 }
+
+const isPdfExport = (screenshot: ScreenshotExport): boolean => screenshot.format === "PDF";
 
 function toScreenshotContent(screenshot: ScreenshotExport): ToolContent[] {
   const { nodeId, nodeName, format, base64, width, height } = screenshot;
@@ -1125,7 +1128,7 @@ function toScreenshotContent(screenshot: ScreenshotExport): ToolContent[] {
       { type: "text", text: Buffer.from(base64, "base64").toString("utf8") },
     ];
   }
-  return [{ type: "text", text: JSON.stringify({ ...meta, base64 }) }];
+  return [{ type: "text", text: JSON.stringify({ exports: [screenshot] }) }];
 }
 
 /**
