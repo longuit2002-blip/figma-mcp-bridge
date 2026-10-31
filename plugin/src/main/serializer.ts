@@ -100,10 +100,27 @@ export type SerializedNode = {
   truncated?: boolean;
 };
 
-export type TreeLimits = { depth: number; maxNodes: number };
+export type TreeLimits = { depth: number; maxNodes: number; maxBytes: number };
 
-export const DEFAULT_TREE_DEPTH = 3;
-export const DEFAULT_TREE_MAX_NODES = 500;
+const DEFAULT_TREE_DEPTH = 3;
+const DEFAULT_TREE_MAX_NODES = 300;
+const DEFAULT_TREE_MAX_BYTES = 60_000;
+export const resolveTreeLimits = (
+  params: Record<string, unknown>,
+  compact: boolean
+): TreeLimits => {
+  const pick = (value: unknown, fallback: number): number =>
+    typeof value === "number" ? value : compact ? fallback : Infinity;
+  return {
+    depth: pick(params.depth, DEFAULT_TREE_DEPTH),
+    maxNodes: pick(params.maxNodes, DEFAULT_TREE_MAX_NODES),
+    maxBytes: pick(params.maxBytes, DEFAULT_TREE_MAX_BYTES),
+  };
+};
+
+const OUTLINE_MAX_CHARACTERS = 80;
+const TRUNCATION_MARKER_BYTES = 36;
+const CHILDREN_WRAPPER_BYTES = 15;
 const YIELD_INTERVAL = 200;
 
 const DEFAULT_STYLE_VALUES: Readonly<Record<string, readonly unknown[]>> = {
@@ -511,6 +528,36 @@ export const serializeNodeShallow = (node: SerializableNode, compact = false): S
   return compact ? compactNode(shallow) : shallow;
 };
 
+const readLabel = (node: SerializableNode): string | undefined => {
+  if (node.type === "TEXT") return node.characters;
+  if ((node.type === "STICKY" || node.type === "SHAPE_WITH_TEXT") && "text" in node) {
+    try {
+      return node.text.characters;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+};
+
+const serializeNodeOutline = (node: SerializableNode): SerializedNode => {
+  const label = readLabel(node);
+  return roundNumbers({
+    id: node.id,
+    name: node.name,
+    type: node.type,
+    bounds: getBounds(node),
+    ...(label === undefined ? {} : { characters: label.slice(0, OUTLINE_MAX_CHARACTERS) }),
+  });
+};
+
+export type TreeShape = "verbose" | "compact" | "outline";
+
+const serializeByShape = (node: SerializableNode, shape: TreeShape): SerializedNode =>
+  shape === "outline"
+    ? serializeNodeOutline(node)
+    : serializeNodeShallow(node, shape === "compact");
+
 type PendingNode = { source: SerializableNode; target: SerializedNode; level: number };
 
 export type TruncationReason = "depth" | "maxNodes" | "maxBytes";
@@ -518,6 +565,8 @@ export type TruncationReason = "depth" | "maxNodes" | "maxBytes";
 export type TreeTruncation = { reason: TruncationReason; omittedRoots: number };
 
 export type TreeResult = { nodes: SerializedNode[]; truncation?: TreeTruncation };
+
+type HaltReason = Exclude<TruncationReason, "depth">;
 
 const TRUNCATION_PRECEDENCE: readonly TruncationReason[] = ["maxBytes", "maxNodes", "depth"];
 
@@ -534,43 +583,83 @@ const isLiveAndVisible = (node: SceneNode): boolean => {
 const getVisibleChildren = (node: SerializableNode): readonly SceneNode[] =>
   "children" in node ? node.children.filter(isLiveAndVisible) : [];
 
-const trySerializeShallow = (node: SerializableNode, compact: boolean): SerializedNode | null => {
+const trySerializeShallow = (node: SerializableNode, shape: TreeShape): SerializedNode | null => {
   try {
-    return node.removed ? null : serializeNodeShallow(node, compact);
+    return node.removed ? null : serializeByShape(node, shape);
   } catch {
     return null;
   }
 };
 
-type WalkState = { emitted: number; reasons: Set<TruncationReason> };
+const measureBytes = (node: SerializedNode): number => JSON.stringify(node).length + 1;
+
+type WalkState = {
+  emitted: number;
+  bytes: number;
+  haltReason?: HaltReason;
+  reasons: Set<TruncationReason>;
+};
+
+const findAffordableChildren = (
+  children: readonly SceneNode[],
+  shape: TreeShape,
+  limits: TreeLimits,
+  state: WalkState
+): { included: SceneNode[]; serialized: SerializedNode[] } => {
+  const included: SceneNode[] = [];
+  const serialized: SerializedNode[] = [];
+  for (const child of children) {
+    if (!state.haltReason && state.emitted >= limits.maxNodes) state.haltReason = "maxNodes";
+    if (state.haltReason) break;
+    const target = trySerializeShallow(child, shape);
+    if (!target) continue;
+    const size = measureBytes(target);
+    if (state.bytes + size > limits.maxBytes) {
+      state.haltReason = "maxBytes";
+      break;
+    }
+    included.push(child);
+    serialized.push(target);
+    state.emitted++;
+    state.bytes += size;
+  }
+  return { included, serialized };
+};
 
 const expandNode = (
   { source, target, level }: PendingNode,
-  compact: boolean,
+  shape: TreeShape,
   limits: TreeLimits,
   state: WalkState,
   queue: PendingNode[]
 ): void => {
   const children = getVisibleChildren(source);
   if (children.length === 0) {
-    if (!compact && "children" in source) target.children = [];
+    if (shape === "verbose" && "children" in source) target.children = [];
     return;
   }
 
-  const room = level < limits.depth ? Math.max(0, limits.maxNodes - state.emitted) : 0;
-  const pending = children.slice(0, room).flatMap((child): PendingNode[] => {
-    const serialized = trySerializeShallow(child, compact);
-    return serialized ? [{ source: child, target: serialized, level: level + 1 }] : [];
-  });
-  if (pending.length > 0) {
-    target.children = pending.map((entry) => entry.target);
+  const canDescend = level < limits.depth;
+  const { included, serialized } = canDescend
+    ? findAffordableChildren(children, shape, limits, state)
+    : { included: [], serialized: [] };
+  if (included.length > 0) {
+    const pending = included.map((child, index) => ({
+      source: child,
+      target: serialized[index],
+      level: level + 1,
+    }));
+    target.children = serialized;
+    state.bytes += CHILDREN_WRAPPER_BYTES;
     queue.push(...pending);
-    state.emitted += pending.length;
   }
-  if (room < children.length) {
+
+  const isCut = !canDescend || state.haltReason !== undefined;
+  if (isCut && included.length < children.length) {
     target.childCount = children.length;
     target.truncated = true;
-    state.reasons.add(level < limits.depth ? "maxNodes" : "depth");
+    state.bytes += TRUNCATION_MARKER_BYTES;
+    state.reasons.add(canDescend ? (state.haltReason ?? "maxNodes") : "depth");
   }
 };
 
@@ -582,39 +671,60 @@ const summarizeTruncation = (
   return reason ? { reason, omittedRoots } : undefined;
 };
 
+const collectRoots = (
+  roots: readonly SerializableNode[],
+  shape: TreeShape,
+  limits: TreeLimits,
+  state: WalkState
+): { queue: PendingNode[]; omittedRoots: number } => {
+  const queue: PendingNode[] = [];
+  let visitedRoots = 0;
+  for (const source of roots) {
+    if (queue.length >= limits.maxNodes) {
+      state.haltReason = "maxNodes";
+      break;
+    }
+    const target = trySerializeShallow(source, shape);
+    if (target) {
+      const size = measureBytes(target);
+      if (queue.length > 0 && state.bytes + size > limits.maxBytes) {
+        state.haltReason = "maxBytes";
+        break;
+      }
+      queue.push({ source, target, level: 0 });
+      state.bytes += size;
+    }
+    visitedRoots++;
+  }
+  state.emitted = queue.length;
+  const omittedRoots = roots.length - visitedRoots;
+  if (omittedRoots > 0 && state.haltReason) state.reasons.add(state.haltReason);
+  return { queue, omittedRoots };
+};
+
 /**
- * Serializes `roots` breadth first so a `maxNodes` cut-off trims the deepest
- * levels instead of whole sibling subtrees. A node whose children were left out
- * (by `depth` or `maxNodes`) reports `childCount` and `truncated: true`, and
- * the result carries the reason that cut the tree.
+ * Serializes `roots` breadth first so a cut-off trims the deepest levels
+ * instead of whole sibling subtrees. The walk stops adding nodes at whichever
+ * of `depth`, `maxNodes` or `maxBytes` (approximate serialized size) is hit
+ * first. A node whose children were left out reports `childCount` and
+ * `truncated: true`, and the result carries the reason that cut the tree.
  * Removed nodes are skipped, and a node that disappears while the walk is
  * suspended is dropped without failing the call.
  * Yields to the event loop every `YIELD_INTERVAL` nodes to keep Figma responsive.
  */
 export const serializeTree = async (
   roots: readonly SerializableNode[],
-  compact: boolean,
+  shape: TreeShape,
   limits: TreeLimits
 ): Promise<TreeResult> => {
-  const queue: PendingNode[] = [];
-  let visitedRoots = 0;
-  for (const source of roots) {
-    if (queue.length >= limits.maxNodes) break;
-    visitedRoots++;
-    const target = trySerializeShallow(source, compact);
-    if (target) queue.push({ source, target, level: 0 });
-  }
-  const omittedRoots = roots.length - visitedRoots;
+  const state: WalkState = { emitted: 0, bytes: 0, reasons: new Set() };
+  const { queue, omittedRoots } = collectRoots(roots, shape, limits, state);
   const nodes = queue.map((entry) => entry.target);
-  const state: WalkState = {
-    emitted: queue.length,
-    reasons: new Set(omittedRoots > 0 ? ["maxNodes"] : []),
-  };
 
   for (let index = 0; index < queue.length; index++) {
     if (index > 0 && index % YIELD_INTERVAL === 0) await yieldToMainThread();
     try {
-      expandNode(queue[index], compact, limits, state, queue);
+      expandNode(queue[index], shape, limits, state, queue);
     } catch {
       continue;
     }

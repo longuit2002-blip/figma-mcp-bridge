@@ -66,6 +66,9 @@ const RASTER_MIME_TYPES: Partial<Record<ExportFormat, string>> = {
   JPG: "image/jpeg",
 };
 
+const TREE_OUTPUT_DESCRIPTION =
+  "Output is compact by default: default-valued properties are omitted and numbers are rounded (2 decimals, 3 for opacity and gradient positions); pass verbose: true for every property. Traversal is bounded by depth (default 3), maxNodes (default 300) and maxBytes (default 60000, approximate serialized size); whichever limit is hit first wins, and with verbose: true and no explicit depth, maxNodes or maxBytes the whole tree is returned, as in v0.0.25. A node whose children were cut off reports childCount and truncated: true and the response ends with a hint naming the limit; call get_node with that node id to expand it.";
+
 export type ExportFormat = "PNG" | "SVG" | "JPG" | "PDF";
 
 /** `run_script` executes arbitrary code in the user's file, so it stays off unless explicitly enabled. */
@@ -148,7 +151,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_document",
-    "Get the current Figma/FigJam page document tree. Output is compact by default: default-valued properties are omitted and numbers are rounded (2 decimals, 3 for opacity and gradient positions); pass verbose: true for every property. Traversal is bounded by depth (default 3) and maxNodes (default 500), with verbose: true and no explicit depth or maxNodes the whole tree is returned, as in v0.0.25. A node whose children were cut off reports childCount and truncated: true; call get_node with that node id to expand it. When multiple files are connected, specify fileKey.",
+    "Get the current Figma/FigJam page document tree. Each node is an outline by default (id, name, type, bounds, characters for text cut to 80 chars, childCount); pass includeStyles: true to add styles, or use get_node for the full node. " +
+      TREE_OUTPUT_DESCRIPTION +
+      " When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_document.shape,
     async ({ fileKey, ...params }, extra): Promise<ToolResult> => {
       return renderTreeResponse(() =>
@@ -159,7 +164,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_selection",
-    "Get the currently selected nodes in Figma/FigJam. Output is compact by default: default-valued properties are omitted and numbers are rounded (2 decimals, 3 for opacity and gradient positions); pass verbose: true for every property. Traversal is bounded by depth (default 3) and maxNodes (default 500), with verbose: true and no explicit depth or maxNodes the whole tree is returned, as in v0.0.25. A node whose children were cut off reports childCount and truncated: true; call get_node with that node id to expand it. When multiple files are connected, specify fileKey.",
+    "Get the currently selected nodes in Figma/FigJam. " +
+      TREE_OUTPUT_DESCRIPTION +
+      " When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_selection.shape,
     async ({ fileKey, ...params }, extra): Promise<ToolResult> => {
       return renderTreeResponse(() =>
@@ -186,7 +193,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_node",
-    "Get a specific Figma/FigJam node by ID. Accepts top-level IDs like '4029:12345' and instance-child IDs like 'I12740:17806;12740:17793'. Never use hyphens. Pass includePrototype: true to also get the prototype interactions on the node and its descendants. Output is compact by default: default-valued properties are omitted and numbers are rounded (2 decimals, 3 for opacity and gradient positions); pass verbose: true for every property. Traversal is bounded by depth (default 3) and maxNodes (default 500), with verbose: true and no explicit depth or maxNodes the whole tree is returned, as in v0.0.25. A node whose children were cut off reports childCount and truncated: true; call get_node with that node id to expand it. When multiple files are connected, specify fileKey.",
+    "Get a specific Figma/FigJam node by ID. Accepts top-level IDs like '4029:12345' and instance-child IDs like 'I12740:17806;12740:17793'. Never use hyphens. Pass includePrototype: true to also get the prototype interactions on the node and its descendants. " +
+      TREE_OUTPUT_DESCRIPTION +
+      " When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_node.shape,
     async ({ nodeId, fileKey, ...params }, extra): Promise<ToolResult> => {
       return renderTreeResponse(() =>

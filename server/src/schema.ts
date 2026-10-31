@@ -111,7 +111,24 @@ const treeMaxNodesField = z
   .max(10000)
   .optional()
   .describe(
-    "Maximum nodes to return in total (default 500), filled level by level. With verbose: true and no maxNodes, there is no node limit."
+    "Maximum nodes to return in total (default 300), filled level by level. With verbose: true and no maxNodes, there is no node limit."
+  );
+
+const treeMaxBytesField = z
+  .number()
+  .int()
+  .min(1000)
+  .max(5_000_000)
+  .optional()
+  .describe(
+    "Approximate serialized size budget in bytes (default 60000). Nodes stop being added once it is reached and the response reports truncation by maxBytes. With verbose: true and no maxBytes, there is no budget."
+  );
+
+const includeStylesField = z
+  .boolean()
+  .optional()
+  .describe(
+    "When true, include the full styles of every node. Default false returns an outline of id, name, type, bounds, text characters (cut to 80) and childCount; use get_node for the styles of one node."
   );
 
 const COMPACT_NODE_VERBOSE_DESCRIPTION =
@@ -883,6 +900,8 @@ export const toolInputSchemas = {
   get_document: z.object({
     depth: treeDepthField,
     maxNodes: treeMaxNodesField,
+    maxBytes: treeMaxBytesField,
+    includeStyles: includeStylesField,
     verbose: verboseField(COMPACT_NODE_VERBOSE_DESCRIPTION),
     fileKey: fileKeyField,
   }),
@@ -890,6 +909,7 @@ export const toolInputSchemas = {
   get_selection: z.object({
     depth: treeDepthField,
     maxNodes: treeMaxNodesField,
+    maxBytes: treeMaxBytesField,
     verbose: verboseField(COMPACT_NODE_VERBOSE_DESCRIPTION),
     fileKey: fileKeyField,
   }),
@@ -923,6 +943,7 @@ export const toolInputSchemas = {
       ),
     depth: treeDepthField,
     maxNodes: treeMaxNodesField,
+    maxBytes: treeMaxBytesField,
     verbose: verboseField(COMPACT_NODE_VERBOSE_DESCRIPTION),
     fileKey: fileKeyField,
   }),

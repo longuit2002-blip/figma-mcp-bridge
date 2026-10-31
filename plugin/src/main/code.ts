@@ -1,12 +1,13 @@
-import {
-  DEFAULT_TREE_DEPTH,
-  DEFAULT_TREE_MAX_NODES,
-  serializeNodeShallow,
-  serializeTree,
-} from "./serializer";
+import { resolveTreeLimits, serializeNodeShallow, serializeTree } from "./serializer";
 import { roundNumbers } from "./rounding";
 import { serializeStylePaints } from "./style-paints";
-import type { SerializableNode, SerializedNode, TreeLimits, TreeTruncation } from "./serializer";
+import type {
+  SerializableNode,
+  SerializedNode,
+  TreeLimits,
+  TreeShape,
+  TreeTruncation,
+} from "./serializer";
 import { addLayersToFrame } from "../html-figma/figma";
 import { exportScreenshot, isScreenshotFormat } from "./screenshot";
 import {
@@ -75,6 +76,7 @@ type ServerRequestParams = Record<string, unknown> & {
   format?: "PNG" | "SVG" | "JPG" | "PDF";
   scale?: number;
   verbose?: boolean;
+  includeStyles?: boolean;
   /**
    * When true, export the node using its absolute bounds (the same behavior
    * exposed by Figma REST image export via `use_absolute_bounds`). This clips
@@ -505,13 +507,14 @@ async function getLayoutTree(rootId: string, maxNodes: number, compact: boolean)
 
 const isCompact = (request: ServerRequest): boolean => request.params?.verbose !== true;
 
-const getTreeLimits = (request: ServerRequest): TreeLimits => {
-  const compact = isCompact(request);
-  const { depth, maxNodes } = request.params ?? {};
-  return {
-    depth: typeof depth === "number" ? depth : compact ? DEFAULT_TREE_DEPTH : Infinity,
-    maxNodes: typeof maxNodes === "number" ? maxNodes : compact ? DEFAULT_TREE_MAX_NODES : Infinity,
-  };
+const getTreeLimits = (request: ServerRequest): TreeLimits =>
+  resolveTreeLimits(request.params ?? {}, isCompact(request));
+
+const getTreeShape = (request: ServerRequest): TreeShape => {
+  if (!isCompact(request)) return "verbose";
+  return request.type === "get_document" && request.params?.includeStyles !== true
+    ? "outline"
+    : "compact";
 };
 
 const treeResponse = (
@@ -540,7 +543,7 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
       case "get_document": {
         const { nodes, truncation } = await serializeTree(
           [figma.currentPage],
-          isCompact(request),
+          getTreeShape(request),
           getTreeLimits(request)
         );
         return treeResponse(request, nodes[0], truncation);
@@ -548,7 +551,7 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
       case "get_selection": {
         const { nodes, truncation } = await serializeTree(
           figma.currentPage.selection,
-          isCompact(request),
+          getTreeShape(request),
           getTreeLimits(request)
         );
         return treeResponse(request, nodes, truncation);
@@ -581,7 +584,7 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
         }
         const { nodes, truncation } = await serializeTree(
           [node as SceneNode],
-          isCompact(request),
+          getTreeShape(request),
           getTreeLimits(request)
         );
         const [data] = nodes;
