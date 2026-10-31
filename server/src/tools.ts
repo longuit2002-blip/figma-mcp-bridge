@@ -50,6 +50,7 @@ import { Follower } from "./follower.js";
 const MAX_IMAGE_BYTES = 32 * 1024 * 1024;
 const IMAGE_FETCH_TIMEOUT_MS = 15_000;
 const MAX_IMAGE_REDIRECTS = 5;
+const SAVE_SCREENSHOTS_CONCURRENCY = 3;
 
 type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
@@ -849,20 +850,27 @@ export async function executeSaveScreenshots(
   hasErrors: boolean;
   results: SaveScreenshotItemResult[];
 }> {
-  const results: SaveScreenshotItemResult[] = [];
+  const results: SaveScreenshotItemResult[] = new Array(items.length);
+  let nextIndex = 0;
 
-  for (const [index, item] of items.entries()) {
-    const result = await saveScreenshotItemToFile(
-      sender,
-      item,
-      index,
-      process.cwd(),
-      format,
-      scale,
-      clip
-    );
-    results.push(result);
-  }
+  const runWorker = async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await saveScreenshotItemToFile(
+        sender,
+        items[index],
+        index,
+        process.cwd(),
+        format,
+        scale,
+        clip
+      );
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(SAVE_SCREENSHOTS_CONCURRENCY, items.length) }, runWorker)
+  );
 
   const succeeded = results.filter((r) => r.success).length;
   const failed = results.length - succeeded;
