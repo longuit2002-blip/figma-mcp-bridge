@@ -1,5 +1,7 @@
 import { readImageSize } from "./image-size";
 
+type Size = { width: number; height: number };
+
 export type ScreenshotFormat = "PNG" | "SVG" | "JPG" | "PDF";
 
 export type ScreenshotOptions = {
@@ -34,11 +36,12 @@ const COMPACT_DEFAULT_SCALE = 1;
 const VERBOSE_DEFAULT_SCALE = 2;
 const MIN_EXPORT_SCALE = 0.01;
 const SCALE_PRECISION = 10000;
+const MAX_RE_EXPORTS = 2;
 
 export const isScreenshotFormat = (value: unknown): value is ScreenshotFormat =>
   value === "PNG" || value === "SVG" || value === "JPG" || value === "PDF";
 
-const getUnscaledSize = (node: SceneNode, clip: boolean): { width: number; height: number } => {
+const getUnscaledSize = (node: SceneNode, clip: boolean): Size => {
   const renderBounds = !clip && "absoluteRenderBounds" in node ? node.absoluteRenderBounds : null;
   const box = renderBounds ?? node.absoluteBoundingBox;
   return box
@@ -46,12 +49,46 @@ const getUnscaledSize = (node: SceneNode, clip: boolean): { width: number; heigh
     : { width: node.width, height: node.height };
 };
 
+const scaleForEdge = (currentScale: number, longestEdge: number): number =>
+  Math.max(
+    MIN_EXPORT_SCALE,
+    Math.floor(((currentScale * MAX_IMAGE_EDGE) / longestEdge) * SCALE_PRECISION) / SCALE_PRECISION
+  );
+
 const getCappedScale = (node: SceneNode, clip: boolean): number => {
   const { width, height } = getUnscaledSize(node, clip);
   const longestEdge = Math.max(width, height);
   if (longestEdge <= MAX_IMAGE_EDGE) return COMPACT_DEFAULT_SCALE;
-  const scale = Math.floor((MAX_IMAGE_EDGE / longestEdge) * SCALE_PRECISION) / SCALE_PRECISION;
-  return Math.max(MIN_EXPORT_SCALE, scale);
+  return scaleForEdge(COMPACT_DEFAULT_SCALE, longestEdge);
+};
+
+const getConservativeBox = (node: SceneNode): Size => {
+  const boxes: Array<Size | null> = [
+    { width: node.width, height: node.height },
+    "absoluteBoundingBox" in node ? node.absoluteBoundingBox : null,
+    "absoluteRenderBounds" in node ? node.absoluteRenderBounds : null,
+  ];
+  return boxes.reduce<Size>(
+    (largest, box) =>
+      box
+        ? {
+            width: Math.max(largest.width, box.width),
+            height: Math.max(largest.height, box.height),
+          }
+        : largest,
+    { width: 0, height: 0 }
+  );
+};
+
+const getConservativeScale = (node: SceneNode): number => {
+  const { width, height } = getConservativeBox(node);
+  const longestEdge = Math.max(width, height);
+  return longestEdge <= MAX_IMAGE_EDGE ? COMPACT_DEFAULT_SCALE : scaleForEdge(1, longestEdge);
+};
+
+const estimateSize = (node: SceneNode, scale: number): Size => {
+  const { width, height } = getConservativeBox(node);
+  return { width: Math.round(width * scale), height: Math.round(height * scale) };
 };
 
 const isOpaquePaint = (paint: Paint, allowGradient: boolean): boolean => {
@@ -112,21 +149,22 @@ const exportCappedRaster = async (
   node: SceneNode,
   format: "PNG" | "JPG",
   clip: boolean
-): Promise<{ bytes: Uint8Array; width: number; height: number } | null> => {
-  const scale = getCappedScale(node, clip);
-  const bytes = await exportRaster(node, format, scale, clip);
-  const size = readImageSize(bytes);
-  if (!size) return null;
-  const longestEdge = Math.max(size.width, size.height);
-  if (longestEdge <= MAX_IMAGE_EDGE) return { bytes, ...size };
+): Promise<{ bytes: Uint8Array; width: number; height: number }> => {
+  let scale = getCappedScale(node, clip);
+  let bytes = await exportRaster(node, format, scale, clip);
+  const conservativeScale = getConservativeScale(node);
 
-  const correctedScale = Math.max(
-    MIN_EXPORT_SCALE,
-    Math.floor(((scale * MAX_IMAGE_EDGE) / longestEdge) * SCALE_PRECISION) / SCALE_PRECISION
-  );
-  const correctedBytes = await exportRaster(node, format, correctedScale, clip);
-  const correctedSize = readImageSize(correctedBytes);
-  return correctedSize ? { bytes: correctedBytes, ...correctedSize } : null;
+  for (let reExports = 0; ; reExports++) {
+    const size = readImageSize(bytes);
+    if (size && Math.max(size.width, size.height) <= MAX_IMAGE_EDGE) return { bytes, ...size };
+    if (size && reExports === MAX_RE_EXPORTS) return { bytes, ...size };
+    if (!size && (scale <= conservativeScale || reExports === MAX_RE_EXPORTS)) {
+      return { bytes, ...estimateSize(node, scale) };
+    }
+
+    scale = size ? scaleForEdge(scale, Math.max(size.width, size.height)) : conservativeScale;
+    bytes = await exportRaster(node, format, scale, clip);
+  }
 };
 
 export const exportScreenshot = async (
@@ -151,14 +189,12 @@ export const exportScreenshot = async (
 
   if (compact && scale === undefined) {
     const capped = await exportCappedRaster(node, format, clip);
-    if (capped) {
-      return {
-        ...identity,
-        base64: figma.base64Encode(capped.bytes),
-        width: capped.width,
-        height: capped.height,
-      };
-    }
+    return {
+      ...identity,
+      base64: figma.base64Encode(capped.bytes),
+      width: capped.width,
+      height: capped.height,
+    };
   }
 
   const effectiveScale = scale ?? (compact ? COMPACT_DEFAULT_SCALE : VERBOSE_DEFAULT_SCALE);
