@@ -94,6 +94,26 @@ const fileKeyField = z
 
 const verboseField = (description: string) => z.boolean().optional().describe(description);
 
+const treeDepthField = z
+  .number()
+  .int()
+  .min(0)
+  .max(100)
+  .optional()
+  .describe(
+    "Levels of descendants to include below each returned node (default 3). Cut-off nodes report childCount and truncated: true; call get_node on that id to go deeper. Not lifted by verbose."
+  );
+
+const treeMaxNodesField = z
+  .number()
+  .int()
+  .min(1)
+  .max(10000)
+  .optional()
+  .describe(
+    "Maximum nodes to return in total (default 500), filled level by level. Not lifted by verbose."
+  );
+
 const COMPACT_NODE_VERBOSE_DESCRIPTION =
   "When true, return every property including defaults and unrounded numbers (the v0.0.25 shape). Default false omits default-valued properties (visible true, opacity 1, empty fills/strokes/effects, cornerRadius 0, MIN/MIN constraints, and similar) and rounds numbers to 2 decimals.";
 
@@ -861,11 +881,15 @@ export const duplicateWithOffsetInput = z.object({
 
 export const toolInputSchemas = {
   get_document: z.object({
+    depth: treeDepthField,
+    maxNodes: treeMaxNodesField,
     verbose: verboseField(COMPACT_NODE_VERBOSE_DESCRIPTION),
     fileKey: fileKeyField,
   }),
 
   get_selection: z.object({
+    depth: treeDepthField,
+    maxNodes: treeMaxNodesField,
     verbose: verboseField(COMPACT_NODE_VERBOSE_DESCRIPTION),
     fileKey: fileKeyField,
   }),
@@ -886,6 +910,8 @@ export const toolInputSchemas = {
       .describe(
         "When true, adds a `prototype` field with the reactions on this node and its descendants (the scan get_prototype_connections returns). Not available in FigJam."
       ),
+    depth: treeDepthField,
+    maxNodes: treeMaxNodesField,
     verbose: verboseField(COMPACT_NODE_VERBOSE_DESCRIPTION),
     fileKey: fileKeyField,
   }),

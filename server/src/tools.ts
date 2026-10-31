@@ -60,6 +60,10 @@ type ToolResult = {
   isError?: boolean;
 };
 
+const TRUNCATED_MARKER = '"truncated":true';
+const TRUNCATION_HINT =
+  "Some nodes were cut off by depth or maxNodes: each reports childCount and truncated: true. Call get_node with that node's id to expand it, or raise depth or maxNodes.";
+
 const RASTER_MIME_TYPES: Partial<Record<ExportFormat, string>> = {
   PNG: "image/png",
   JPG: "image/jpeg",
@@ -147,22 +151,22 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_document",
-    "Get the current Figma/FigJam page document tree. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. When multiple files are connected, specify fileKey.",
+    "Get the current Figma/FigJam page document tree. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. Traversal is bounded by depth (default 3) and maxNodes (default 500), and verbose does not lift these limits; only explicit depth or maxNodes values do. A node whose children were cut off reports childCount and truncated: true; call get_node with that node id to expand it. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_document.shape,
-    async ({ verbose, fileKey }, extra): Promise<ToolResult> => {
-      return renderResponse(() =>
-        node.sendWithParams("get_document", undefined, { verbose }, fileKey, extra.signal)
+    async ({ fileKey, ...params }, extra): Promise<ToolResult> => {
+      return renderTreeResponse(() =>
+        node.sendWithParams("get_document", undefined, params, fileKey, extra.signal)
       );
     }
   );
 
   server.tool(
     "get_selection",
-    "Get the currently selected nodes in Figma/FigJam. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. When multiple files are connected, specify fileKey.",
+    "Get the currently selected nodes in Figma/FigJam. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. Traversal is bounded by depth (default 3) and maxNodes (default 500), and verbose does not lift these limits; only explicit depth or maxNodes values do. A node whose children were cut off reports childCount and truncated: true; call get_node with that node id to expand it. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_selection.shape,
-    async ({ verbose, fileKey }, extra): Promise<ToolResult> => {
-      return renderResponse(() =>
-        node.sendWithParams("get_selection", undefined, { verbose }, fileKey, extra.signal)
+    async ({ fileKey, ...params }, extra): Promise<ToolResult> => {
+      return renderTreeResponse(() =>
+        node.sendWithParams("get_selection", undefined, params, fileKey, extra.signal)
       );
     }
   );
@@ -179,10 +183,10 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_node",
-    "Get a specific Figma/FigJam node by ID. Accepts top-level IDs like '4029:12345' and instance-child IDs like 'I12740:17806;12740:17793'. Never use hyphens. Pass includePrototype: true to also get the prototype interactions on the node and its descendants. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. When multiple files are connected, specify fileKey.",
+    "Get a specific Figma/FigJam node by ID. Accepts top-level IDs like '4029:12345' and instance-child IDs like 'I12740:17806;12740:17793'. Never use hyphens. Pass includePrototype: true to also get the prototype interactions on the node and its descendants. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. Traversal is bounded by depth (default 3) and maxNodes (default 500), and verbose does not lift these limits; only explicit depth or maxNodes values do. A node whose children were cut off reports childCount and truncated: true; call get_node with that node id to expand it. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_node.shape,
     async ({ nodeId, fileKey, ...params }, extra): Promise<ToolResult> => {
-      return renderResponse(() =>
+      return renderTreeResponse(() =>
         node.sendWithParams("get_node", [nodeId], params, fileKey, extra.signal)
       );
     }
@@ -1041,6 +1045,20 @@ async function renderResponse(fn: () => Promise<BridgeResponse>): Promise<ToolRe
       isError: true,
     };
   }
+}
+
+/**
+ * Like renderResponse, but appends a hint when the plugin reports cut-off nodes.
+ * @param fn - Bridge call to execute.
+ * @returns Tool result, with a trailing text block when any node is truncated.
+ */
+async function renderTreeResponse(fn: () => Promise<BridgeResponse>): Promise<ToolResult> {
+  const result = await renderResponse(fn);
+  const [first] = result.content;
+  if (result.isError || first?.type !== "text" || !first.text.includes(TRUNCATED_MARKER)) {
+    return result;
+  }
+  return { ...result, content: [...result.content, { type: "text", text: TRUNCATION_HINT }] };
 }
 
 /**

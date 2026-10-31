@@ -1,5 +1,10 @@
-import { serializeNode, serializeNodeShallow } from "./serializer";
-import type { SerializableNode } from "./serializer";
+import {
+  DEFAULT_TREE_DEPTH,
+  DEFAULT_TREE_MAX_NODES,
+  serializeNodeShallow,
+  serializeTree,
+} from "./serializer";
+import type { SerializableNode, SerializedNode, TreeLimits } from "./serializer";
 import { addLayersToFrame } from "../html-figma/figma";
 import {
   COMPACT_DEFAULT_FORMAT,
@@ -516,6 +521,12 @@ async function getLayoutTree(rootId: string, maxNodes = 2000) {
 
 const isCompact = (request: ServerRequest): boolean => request.params?.verbose !== true;
 
+const getTreeLimits = (request: ServerRequest): TreeLimits => ({
+  depth: typeof request.params?.depth === "number" ? request.params.depth : DEFAULT_TREE_DEPTH,
+  maxNodes:
+    typeof request.params?.maxNodes === "number" ? request.params.maxNodes : DEFAULT_TREE_MAX_NODES,
+});
+
 const handleRequest = async (request: ServerRequest): Promise<PluginResponse> => {
   try {
     if (EDIT_REQUEST_TYPES.has(request.type)) {
@@ -526,13 +537,19 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
         return {
           type: request.type,
           requestId: request.requestId,
-          data: serializeNode(figma.currentPage, isCompact(request)),
+          data: (
+            await serializeTree([figma.currentPage], isCompact(request), getTreeLimits(request))
+          )[0],
         };
       case "get_selection":
         return {
           type: request.type,
           requestId: request.requestId,
-          data: figma.currentPage.selection.map((node) => serializeNode(node, isCompact(request))),
+          data: await serializeTree(
+            figma.currentPage.selection,
+            isCompact(request),
+            getTreeLimits(request)
+          ),
         };
       case "get_layout_tree": {
         const rootId = request.nodeIds?.[0];
@@ -552,7 +569,11 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
         if (!node || node.type === "DOCUMENT") {
           throw new Error(`Node not found: ${nodeId}`);
         }
-        const data = serializeNode(node as SceneNode, isCompact(request));
+        const [data] = await serializeTree(
+          [node as SceneNode],
+          isCompact(request),
+          getTreeLimits(request)
+        );
         if (!request.params?.includePrototype) {
           return { type: request.type, requestId: request.requestId, data };
         }
@@ -698,7 +719,7 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
         const serializeWithDepth = (
           node: SerializableNode,
           currentDepth: number
-        ): ReturnType<typeof serializeNode> => {
+        ): SerializedNode => {
           const serialized = serializeNodeShallow(node, compact);
           if (!("children" in node)) return serialized;
           const visibleChildren = node.children.filter((child) => child.visible !== false);
@@ -707,7 +728,7 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
               ...serialized,
               children: undefined,
               childCount: visibleChildren.length,
-            } as ReturnType<typeof serializeNode> & { childCount: number };
+            };
           }
           return {
             ...serialized,
