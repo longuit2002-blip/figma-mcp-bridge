@@ -77,7 +77,7 @@ If you want to know more about how it works, read the [How it works](#how-it-wor
 | `get_metadata`                 | Get file name, pages, and current page info                                                              |
 | `get_design_context`           | Get a depth-limited tree optimized for understanding design context                                      |
 | `get_variable_defs`            | Get all variable collections, modes, and values (design tokens)                                          |
-| `get_screenshot`               | Export nodes as PNG/SVG/JPG/PDF (base64-encoded)                                                         |
+| `get_screenshot`               | Export nodes as JPG/PNG image blocks (capped to 1568 px by default), SVG text, or PDF                    |
 | `save_screenshots`             | Export and save screenshots directly to the local filesystem                                             |
 | `get_motion_styles`            | List all available animation presets (beta)                                                              |
 | `get_node_motion`              | Read a node's current animation styles and properties (beta)                                             |
@@ -123,6 +123,16 @@ If you want to know more about how it works, read the [How it works](#how-it-wor
 | `run_script`                   | Run Plugin API JavaScript in the plugin sandbox (opt-in, see Editing Notes)                              |
 
 All tools accept an optional `fileKey` parameter when multiple Figma files are connected. Use `list_files` to discover connected files and their keys.
+
+### Token-Efficient Output
+
+Read tools return compact output by default; pass `verbose: true` to get exactly the v0.0.25 shape.
+
+- `get_screenshot`: JPG at scale 1 with the longest edge capped at 1568 px, returned as MCP image blocks (plus a small text block with nodeId, name and pixel size). SVG is returned as text. An explicit `format` or `scale` wins, and an explicit `scale` is not capped. `verbose` restores PNG at scale 2 as base64 in a JSON text block. `save_screenshots` is unchanged: it writes files and returns paths and sizes only.
+- `get_document`, `get_selection`, `get_node`: bounded by `depth` (default 3) and `maxNodes` (default 500). A node whose children were cut off reports `childCount` and `truncated: true`; call `get_node` on its id to dig deeper. `verbose` does not lift these limits, only explicit values do.
+- `get_document`, `get_selection`, `get_node`, `get_design_context`: default-valued properties are omitted (`visible: true`, opacity 1, empty fills/strokes/effects, `cornerRadius: 0`, MIN/MIN constraints, and similar) and numbers are rounded to 2 decimals.
+- `get_layout_tree`: `maxNodes` defaults to 300, `absoluteTransform` is omitted for pure translations, and `absoluteRenderBounds` is omitted when equal to `absoluteBoundingBox`.
+- `get_styles`: paint styles use hex colors instead of raw Figma paints.
 
 ### Prototype Notes
 
