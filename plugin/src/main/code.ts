@@ -507,11 +507,14 @@ async function getLayoutTree(rootId: string, maxNodes: number, compact: boolean)
 
 const isCompact = (request: ServerRequest): boolean => request.params?.verbose !== true;
 
-const getTreeLimits = (request: ServerRequest): TreeLimits => ({
-  depth: typeof request.params?.depth === "number" ? request.params.depth : DEFAULT_TREE_DEPTH,
-  maxNodes:
-    typeof request.params?.maxNodes === "number" ? request.params.maxNodes : DEFAULT_TREE_MAX_NODES,
-});
+const getTreeLimits = (request: ServerRequest): TreeLimits => {
+  const compact = isCompact(request);
+  const { depth, maxNodes } = request.params ?? {};
+  return {
+    depth: typeof depth === "number" ? depth : compact ? DEFAULT_TREE_DEPTH : Infinity,
+    maxNodes: typeof maxNodes === "number" ? maxNodes : compact ? DEFAULT_TREE_MAX_NODES : Infinity,
+  };
+};
 
 const handleRequest = async (request: ServerRequest): Promise<PluginResponse> => {
   try {

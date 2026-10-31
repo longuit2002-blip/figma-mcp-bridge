@@ -101,7 +101,7 @@ const treeDepthField = z
   .max(100)
   .optional()
   .describe(
-    "Levels of descendants to include below each returned node (default 3). Cut-off nodes report childCount and truncated: true; call get_node on that id to go deeper. Not lifted by verbose."
+    "Levels of descendants to include below each returned node (default 3). Cut-off nodes report childCount and truncated: true; call get_node on that id to go deeper. With verbose: true and no depth, the whole tree is returned."
   );
 
 const treeMaxNodesField = z
@@ -111,7 +111,7 @@ const treeMaxNodesField = z
   .max(10000)
   .optional()
   .describe(
-    "Maximum nodes to return in total (default 500), filled level by level. Not lifted by verbose."
+    "Maximum nodes to return in total (default 500), filled level by level. With verbose: true and no maxNodes, there is no node limit."
   );
 
 const COMPACT_NODE_VERBOSE_DESCRIPTION =
