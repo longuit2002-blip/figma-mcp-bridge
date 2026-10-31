@@ -95,12 +95,13 @@ export class Leader {
   }
 
   private handleRPC(req: http.IncomingMessage, res: http.ServerResponse): void {
-    let body = "";
+    const chunks: Buffer[] = [];
     req.on("data", (chunk: Buffer) => {
-      body += chunk.toString();
+      chunks.push(chunk);
     });
     req.on("end", async () => {
       try {
+        const body = Buffer.concat(chunks).toString("utf8");
         const rpcReq: RPCRequest = JSON.parse(body);
 
         // Handle list_files as a special RPC (not forwarded to plugin)
