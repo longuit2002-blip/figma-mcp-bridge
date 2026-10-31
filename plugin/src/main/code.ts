@@ -3,6 +3,7 @@ import {
   DEFAULT_TREE_MAX_NODES,
   roundNumbers,
   serializeNodeShallow,
+  serializeStylePaints,
   serializeTree,
 } from "./serializer";
 import type { SerializableNode, SerializedNode, TreeLimits } from "./serializer";
@@ -603,6 +604,7 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
         };
       }
       case "get_styles": {
+        const compact = isCompact(request);
         if (isFigJam()) {
           // FigJam has a limited style API — paint/text/effect/grid style
           // collections may not be available. Return what we can.
@@ -631,7 +633,7 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
               paints: paintStyles.map((style) => ({
                 id: style.id,
                 name: style.name,
-                paints: style.paints,
+                paints: serializeStylePaints(style.paints, compact),
               })),
               text: textStyles.map((style) => ({
                 id: style.id,
@@ -665,7 +667,7 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
             paints: paintStyles.map((style) => ({
               id: style.id,
               name: style.name,
-              paints: style.paints,
+              paints: serializeStylePaints(style.paints, compact),
             })),
             text: textStyles.map((style) => ({
               id: style.id,

@@ -228,10 +228,12 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_styles",
-    "Get all local styles in the document. When multiple files are connected, specify fileKey.",
+    "Get all local styles in the document. Paint styles use hex colors by default; pass verbose: true for the raw Figma paints. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_styles.shape,
-    async ({ fileKey }, extra): Promise<ToolResult> => {
-      return renderResponse(() => node.send("get_styles", undefined, fileKey, extra.signal));
+    async ({ verbose, fileKey }, extra): Promise<ToolResult> => {
+      return renderResponse(() =>
+        node.sendWithParams("get_styles", undefined, { verbose }, fileKey, extra.signal)
+      );
     }
   );
 

@@ -480,6 +480,9 @@ const buildShallowNode = (node: SerializableNode, compact: boolean): SerializedN
   return base;
 };
 
+export const serializeStylePaints = (paints: readonly Paint[], compact: boolean): unknown =>
+  compact ? roundNumbers(serializePaints(paints, true)) : paints;
+
 export const serializeNodeShallow = (node: SerializableNode, compact = false): SerializedNode => {
   const shallow = buildShallowNode(node, compact);
   return compact ? compactNode(shallow) : shallow;
