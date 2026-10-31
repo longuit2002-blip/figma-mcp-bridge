@@ -5,6 +5,7 @@ import { Bridge } from "./bridge.js";
 import { validateRpc } from "./schema.js";
 import { executeSaveScreenshots, isRunScriptEnabled } from "./tools.js";
 import type { ExportFormat } from "./tools.js";
+import { pickTreeTruncation } from "./types.js";
 import type { RPCRequest, RPCResponse } from "./types.js";
 import { VERSION } from "./version.js";
 
@@ -176,7 +177,11 @@ export class Leader {
           abortController.signal
         );
 
-        this.sendJSON(res, 200, resp.error ? { error: resp.error } : { data: resp.data });
+        this.sendJSON(
+          res,
+          200,
+          resp.error ? { error: resp.error } : { data: resp.data, ...pickTreeTruncation(resp) }
+        );
       } catch (err) {
         this.sendJSON(res, 200, {
           error: err instanceof Error ? err.message : String(err),

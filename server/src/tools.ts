@@ -44,7 +44,8 @@ import {
   MAX_SVG_BYTES,
   toolInputSchemas,
 } from "./schema.js";
-import type { BridgeResponse } from "./types.js";
+import { pickTreeTruncation } from "./types.js";
+import type { BridgeResponse, TreeTruncationMeta } from "./types.js";
 import { Follower } from "./follower.js";
 
 const MAX_IMAGE_BYTES = 32 * 1024 * 1024;
@@ -59,10 +60,6 @@ type ToolResult = {
   content: ToolContent[];
   isError?: boolean;
 };
-
-const TRUNCATED_MARKER = '"truncated":true';
-const TRUNCATION_HINT =
-  "Some nodes were cut off by depth or maxNodes: each reports childCount and truncated: true. Call get_node with that node's id to expand it, or raise depth or maxNodes.";
 
 const RASTER_MIME_TYPES: Partial<Record<ExportFormat, string>> = {
   PNG: "image/png",
@@ -1055,18 +1052,31 @@ async function renderResponse(fn: () => Promise<BridgeResponse>): Promise<ToolRe
   }
 }
 
+function buildTruncationHint({ truncationReason, omittedRoots }: TreeTruncationMeta): string {
+  const limit = truncationReason ?? "depth or maxNodes";
+  const cutOff = `Some nodes were cut off by ${limit}: each reports childCount and truncated: true. Call get_node with that node's id to expand it, or raise ${limit}.`;
+  return omittedRoots
+    ? `${cutOff} ${omittedRoots} more selected nodes were left out entirely.`
+    : cutOff;
+}
+
 /**
- * Like renderResponse, but appends a hint when the plugin reports cut-off nodes.
+ * Like renderResponse, but appends a hint when the plugin flags the tree as truncated.
  * @param fn - Bridge call to execute.
- * @returns Tool result, with a trailing text block when any node is truncated.
+ * @returns Tool result, with a trailing text block when the plugin set treeTruncated.
  */
 async function renderTreeResponse(fn: () => Promise<BridgeResponse>): Promise<ToolResult> {
-  const result = await renderResponse(fn);
-  const [first] = result.content;
-  if (result.isError || first?.type !== "text" || !first.text.includes(TRUNCATED_MARKER)) {
-    return result;
-  }
-  return { ...result, content: [...result.content, { type: "text", text: TRUNCATION_HINT }] };
+  const seen: { meta?: TreeTruncationMeta } = {};
+  const result = await renderResponse(async () => {
+    const resp = await fn();
+    seen.meta = pickTreeTruncation(resp);
+    return resp;
+  });
+  if (result.isError || !seen.meta?.treeTruncated) return result;
+  return {
+    ...result,
+    content: [...result.content, { type: "text", text: buildTruncationHint(seen.meta) }],
+  };
 }
 
 /**

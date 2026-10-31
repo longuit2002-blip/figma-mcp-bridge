@@ -487,6 +487,14 @@ export const serializeNodeShallow = (node: SerializableNode, compact = false): S
 
 type PendingNode = { source: SerializableNode; target: SerializedNode; level: number };
 
+export type TruncationReason = "depth" | "maxNodes" | "maxBytes";
+
+export type TreeTruncation = { reason: TruncationReason; omittedRoots: number };
+
+export type TreeResult = { nodes: SerializedNode[]; truncation?: TreeTruncation };
+
+const TRUNCATION_PRECEDENCE: readonly TruncationReason[] = ["maxBytes", "maxNodes", "depth"];
+
 const yieldToMainThread = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 const isLiveAndVisible = (node: SceneNode): boolean => {
@@ -508,11 +516,13 @@ const trySerializeShallow = (node: SerializableNode, compact: boolean): Serializ
   }
 };
 
+type WalkState = { emitted: number; reasons: Set<TruncationReason> };
+
 const expandNode = (
   { source, target, level }: PendingNode,
   compact: boolean,
   limits: TreeLimits,
-  state: { emitted: number },
+  state: WalkState,
   queue: PendingNode[]
 ): void => {
   const children = getVisibleChildren(source);
@@ -534,13 +544,23 @@ const expandNode = (
   if (room < children.length) {
     target.childCount = children.length;
     target.truncated = true;
+    state.reasons.add(level < limits.depth ? "maxNodes" : "depth");
   }
+};
+
+const summarizeTruncation = (
+  state: WalkState,
+  omittedRoots: number
+): TreeTruncation | undefined => {
+  const reason = TRUNCATION_PRECEDENCE.find((candidate) => state.reasons.has(candidate));
+  return reason ? { reason, omittedRoots } : undefined;
 };
 
 /**
  * Serializes `roots` breadth first so a `maxNodes` cut-off trims the deepest
  * levels instead of whole sibling subtrees. A node whose children were left out
- * (by `depth` or `maxNodes`) reports `childCount` and `truncated: true`.
+ * (by `depth` or `maxNodes`) reports `childCount` and `truncated: true`, and
+ * the result carries the reason that cut the tree.
  * Removed nodes are skipped, and a node that disappears while the walk is
  * suspended is dropped without failing the call.
  * Yields to the event loop every `YIELD_INTERVAL` nodes to keep Figma responsive.
@@ -549,13 +569,13 @@ export const serializeTree = async (
   roots: readonly SerializableNode[],
   compact: boolean,
   limits: TreeLimits
-): Promise<SerializedNode[]> => {
+): Promise<TreeResult> => {
   const queue = roots.flatMap((source): PendingNode[] => {
     const target = trySerializeShallow(source, compact);
     return target ? [{ source, target, level: 0 }] : [];
   });
-  const targets = queue.map((entry) => entry.target);
-  const state = { emitted: queue.length };
+  const nodes = queue.map((entry) => entry.target);
+  const state: WalkState = { emitted: queue.length, reasons: new Set() };
 
   for (let index = 0; index < queue.length; index++) {
     if (index > 0 && index % YIELD_INTERVAL === 0) await yieldToMainThread();
@@ -566,5 +586,6 @@ export const serializeTree = async (
     }
   }
 
-  return targets;
+  const truncation = summarizeTruncation(state, 0);
+  return truncation ? { nodes, truncation } : { nodes };
 };

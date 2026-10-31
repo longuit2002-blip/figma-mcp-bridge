@@ -5,7 +5,22 @@ export interface BridgeRequest {
   params?: Record<string, unknown>;
 }
 
-export interface BridgeResponse {
+export interface TreeTruncationMeta {
+  treeTruncated?: boolean;
+  truncationReason?: string;
+  omittedRoots?: number;
+}
+
+export const pickTreeTruncation = (source: TreeTruncationMeta): TreeTruncationMeta =>
+  source.treeTruncated
+    ? {
+        treeTruncated: true,
+        truncationReason: source.truncationReason,
+        omittedRoots: source.omittedRoots,
+      }
+    : {};
+
+export interface BridgeResponse extends TreeTruncationMeta {
   type: string;
   requestId: string;
   data?: unknown;
@@ -19,7 +34,7 @@ export interface RPCRequest {
   fileKey?: string;
 }
 
-export interface RPCResponse {
+export interface RPCResponse extends TreeTruncationMeta {
   data?: unknown;
   error?: string;
 }

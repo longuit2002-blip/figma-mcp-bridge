@@ -6,7 +6,7 @@ import {
   serializeTree,
 } from "./serializer";
 import { serializeStylePaints } from "./style-paints";
-import type { SerializableNode, SerializedNode, TreeLimits } from "./serializer";
+import type { SerializableNode, SerializedNode, TreeLimits, TreeTruncation } from "./serializer";
 import { addLayersToFrame } from "../html-figma/figma";
 import { exportScreenshot, isScreenshotFormat } from "./screenshot";
 import {
@@ -109,6 +109,9 @@ type PluginResponse = {
   requestId: string;
   data?: unknown;
   error?: string;
+  treeTruncated?: true;
+  truncationReason?: string;
+  omittedRoots?: number;
 };
 
 let cachedFallbackFileKey: string | null = null;
@@ -511,30 +514,45 @@ const getTreeLimits = (request: ServerRequest): TreeLimits => {
   };
 };
 
+const treeResponse = (
+  request: ServerRequest,
+  data: unknown,
+  truncation?: TreeTruncation
+): PluginResponse => ({
+  type: request.type,
+  requestId: request.requestId,
+  data,
+  ...(truncation
+    ? {
+        treeTruncated: true as const,
+        truncationReason: truncation.reason,
+        ...(truncation.omittedRoots > 0 ? { omittedRoots: truncation.omittedRoots } : {}),
+      }
+    : {}),
+});
+
 const handleRequest = async (request: ServerRequest): Promise<PluginResponse> => {
   try {
     if (EDIT_REQUEST_TYPES.has(request.type)) {
       requireEditorMode(request.type);
     }
     switch (request.type) {
-      case "get_document":
-        return {
-          type: request.type,
-          requestId: request.requestId,
-          data: (
-            await serializeTree([figma.currentPage], isCompact(request), getTreeLimits(request))
-          )[0],
-        };
-      case "get_selection":
-        return {
-          type: request.type,
-          requestId: request.requestId,
-          data: await serializeTree(
-            figma.currentPage.selection,
-            isCompact(request),
-            getTreeLimits(request)
-          ),
-        };
+      case "get_document": {
+        const { nodes, truncation } = await serializeTree(
+          [figma.currentPage],
+          isCompact(request),
+          getTreeLimits(request)
+        );
+        return treeResponse(request, nodes[0], truncation);
+      }
+      case "get_selection": {
+        const { nodes, truncation } = await serializeTree(
+          figma.currentPage.selection,
+          isCompact(request),
+          getTreeLimits(request)
+        );
+        return treeResponse(request, nodes, truncation);
+      }
       case "get_layout_tree": {
         const compact = isCompact(request);
         const rootId = request.nodeIds?.[0];
@@ -561,20 +579,17 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
         if (!node || node.type === "DOCUMENT") {
           throw new Error(`Node not found: ${nodeId}`);
         }
-        const [data] = await serializeTree(
+        const { nodes, truncation } = await serializeTree(
           [node as SceneNode],
           isCompact(request),
           getTreeLimits(request)
         );
+        const [data] = nodes;
         if (!request.params?.includePrototype) {
-          return { type: request.type, requestId: request.requestId, data };
+          return treeResponse(request, data, truncation);
         }
         requirePrototypes("get_node includePrototype");
-        return {
-          type: request.type,
-          requestId: request.requestId,
-          data: { ...data, prototype: await scanPrototype(node) },
-        };
+        return treeResponse(request, { ...data, prototype: await scanPrototype(node) }, truncation);
       }
       case "get_prototype_connections": {
         requirePrototypes(request.type);

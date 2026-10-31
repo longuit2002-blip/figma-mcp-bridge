@@ -1,4 +1,4 @@
-import { followerTimeoutMs } from "./types.js";
+import { followerTimeoutMs, pickTreeTruncation } from "./types.js";
 import type { BridgeResponse, ConnectedFile, RPCRequest, RPCResponse } from "./types.js";
 
 const linkSignals = (sources: AbortSignal[]): { signal: AbortSignal; dispose: () => void } => {
@@ -77,6 +77,7 @@ export class Follower {
         type: requestType,
         requestId: "",
         data: rpcResp.data,
+        ...pickTreeTruncation(rpcResp),
       };
     } finally {
       linked.dispose();
