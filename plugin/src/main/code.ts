@@ -3,9 +3,9 @@ import {
   DEFAULT_TREE_MAX_NODES,
   roundNumbers,
   serializeNodeShallow,
-  serializeStylePaints,
   serializeTree,
 } from "./serializer";
+import { serializeStylePaints } from "./style-paints";
 import type { SerializableNode, SerializedNode, TreeLimits } from "./serializer";
 import { addLayersToFrame } from "../html-figma/figma";
 import {

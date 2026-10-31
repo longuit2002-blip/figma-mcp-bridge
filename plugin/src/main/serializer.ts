@@ -139,7 +139,7 @@ export const roundNumbers = <T>(value: T): T => {
 const omitOpacityOne = (opacity: number | undefined, compact: boolean): { opacity?: number } =>
   compact && (opacity === undefined || opacity === 1) ? {} : { opacity };
 
-const toHex = (color: RGB): string => {
+export const toHex = (color: RGB): string => {
   const clamp = (value: number) => Math.min(255, Math.max(0, Math.round(value * 255)));
   const [r, g, b] = [clamp(color.r), clamp(color.g), clamp(color.b)];
   return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
@@ -479,9 +479,6 @@ const buildShallowNode = (node: SerializableNode, compact: boolean): SerializedN
 
   return base;
 };
-
-export const serializeStylePaints = (paints: readonly Paint[], compact: boolean): unknown =>
-  compact ? roundNumbers(serializePaints(paints, true)) : paints;
 
 export const serializeNodeShallow = (node: SerializableNode, compact = false): SerializedNode => {
   const shallow = buildShallowNode(node, compact);

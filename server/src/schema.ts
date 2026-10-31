@@ -970,7 +970,7 @@ export const toolInputSchemas = {
 
   get_styles: z.object({
     verbose: verboseField(
-      "When true, return paint styles as raw Figma paints (color as r/g/b floats) like v0.0.25. Default returns hex colors with opacity 1 omitted and numbers rounded to 2 decimals."
+      "When true, return paint styles as raw Figma paints (color as r/g/b floats) like v0.0.25. Default returns hex colors with opacity 1 omitted and numbers rounded, and keeps boundVariables as variable ids, any blendMode other than NORMAL, and hidden paints with visible: false."
     ),
     fileKey: fileKeyField,
   }),
