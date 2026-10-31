@@ -33,10 +33,14 @@ const READ_TIMEOUT_MS = 30_000;
 const DEFAULT_TIMEOUT_MS = 180_000;
 const FOLLOWER_TIMEOUT_MARGIN_MS = 30_000;
 
+const READ_TIMEOUT_REQUEST_TYPES: ReadonlySet<string> = new Set([
+  "get_metadata",
+  "get_styles",
+  "get_variable_defs",
+]);
+
 export const bridgeTimeoutMs = (requestType: string): number =>
-  requestType.startsWith("get_") && requestType !== "get_screenshot"
-    ? READ_TIMEOUT_MS
-    : DEFAULT_TIMEOUT_MS;
+  READ_TIMEOUT_REQUEST_TYPES.has(requestType) ? READ_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
 
 export const followerTimeoutMs = (requestType: string): number =>
   bridgeTimeoutMs(requestType) + FOLLOWER_TIMEOUT_MARGIN_MS;
