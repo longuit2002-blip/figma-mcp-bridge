@@ -900,6 +900,37 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 }
 
 /**
+ * Finds items whose outputPath resolves to the same file as another item.
+ * @param items - Screenshot save operations to inspect.
+ * @param workspaceRoot - Root directory used to resolve relative paths.
+ * @returns Error message per item index; every item sharing a path is included.
+ */
+function findDuplicateOutputPaths(
+  items: SaveScreenshotItemInput[],
+  workspaceRoot: string
+): Map<number, string> {
+  const indexesByPath = new Map<string, number[]>();
+  items.forEach((item, index) => {
+    let resolvedPath: string;
+    try {
+      resolvedPath = resolveAndValidateOutputPath(item.outputPath, workspaceRoot);
+    } catch {
+      return;
+    }
+    const key = process.platform === "win32" ? resolvedPath.toLowerCase() : resolvedPath;
+    indexesByPath.set(key, [...(indexesByPath.get(key) ?? []), index]);
+  });
+
+  const errorsByIndex = new Map<number, string>();
+  for (const indexes of indexesByPath.values()) {
+    if (indexes.length < 2) continue;
+    const message = `Duplicate outputPath: items ${indexes.join(", ")} resolve to the same file, nothing was exported for them`;
+    indexes.forEach((index) => errorsByIndex.set(index, message));
+  }
+  return errorsByIndex;
+}
+
+/**
  * Saves screenshots for multiple nodes to the local filesystem in batch.
  * @param sender - Sender that forwards get_screenshot requests to the plugin.
  * @param items - Screenshot save operations to execute.
@@ -922,11 +953,23 @@ export async function executeSaveScreenshots(
   results: SaveScreenshotItemResult[];
 }> {
   const results: SaveScreenshotItemResult[] = new Array(items.length);
+  const duplicateErrors = findDuplicateOutputPaths(items, process.cwd());
   let nextIndex = 0;
 
   const runWorker = async () => {
     while (nextIndex < items.length) {
       const index = nextIndex++;
+      const duplicateError = duplicateErrors.get(index);
+      if (duplicateError) {
+        results[index] = {
+          index,
+          nodeId: items[index].nodeId,
+          outputPath: items[index].outputPath,
+          success: false,
+          error: duplicateError,
+        };
+        continue;
+      }
       results[index] = await saveScreenshotItemToFile(
         sender,
         items[index],
