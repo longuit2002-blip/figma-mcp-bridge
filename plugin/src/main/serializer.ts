@@ -109,7 +109,6 @@ const YIELD_INTERVAL = 200;
 const DEFAULT_STYLE_VALUES: Readonly<Record<string, readonly unknown[]>> = {
   visible: [true],
   opacity: [1],
-  blendMode: ["PASS_THROUGH", "NORMAL"],
   cornerRadius: [0],
   clipsContent: [false],
   textDecoration: ["NONE"],
@@ -121,6 +120,15 @@ const DEFAULT_AUTO_LAYOUT_VALUES: Readonly<Record<string, readonly unknown[]>> =
   primaryAxisAlign: ["MIN"],
   counterAxisAlign: ["MIN"],
 };
+const CONTAINER_TYPES: ReadonlySet<string> = new Set([
+  "FRAME",
+  "GROUP",
+  "COMPONENT",
+  "COMPONENT_SET",
+  "INSTANCE",
+  "SECTION",
+]);
+const FILL_SENSITIVE_TYPES: ReadonlySet<string> = new Set(["FRAME", "COMPONENT", "INSTANCE"]);
 
 const isMixed = (value: unknown): value is symbol => typeof value === "symbol";
 
@@ -379,11 +387,20 @@ const isDefaultLetterSpacing = (value: unknown): boolean => isRecord(value) && v
 const isDefaultConstraints = (value: unknown): boolean =>
   isRecord(value) && value.horizontal === "MIN" && value.vertical === "MIN";
 
-const isDefaultStyleEntry = (key: string, value: unknown, hasStrokes: boolean): boolean => {
+const isDefaultBlendMode = (type: string, value: unknown): boolean =>
+  value === (CONTAINER_TYPES.has(type) ? "PASS_THROUGH" : "NORMAL");
+
+type PruneContext = { type: string; hasStrokes: boolean };
+
+const isDefaultStyleEntry = (key: string, value: unknown, context: PruneContext): boolean => {
+  const { type, hasStrokes } = context;
   if (value === undefined) return true;
-  if (Array.isArray(value)) return value.length === 0;
+  if (Array.isArray(value))
+    return value.length === 0 && !(key === "fills" && FILL_SENSITIVE_TYPES.has(type));
   if (DEFAULT_STYLE_VALUES[key]?.includes(value)) return true;
   switch (key) {
+    case "blendMode":
+      return isDefaultBlendMode(type, value);
     case "strokeWeight":
     case "strokeAlign":
       return !hasStrokes;
@@ -432,20 +449,24 @@ const pruneStyleEntry = (key: string, value: unknown): unknown => {
   return value;
 };
 
-const pruneDefaultStyles = (styles: Record<string, unknown>): Record<string, unknown> => {
+const pruneDefaultStyles = (
+  styles: Record<string, unknown>,
+  type: string
+): Record<string, unknown> => {
   const hasStrokes = Array.isArray(styles.strokes)
     ? styles.strokes.length > 0
     : "strokes" in styles;
+  const context: PruneContext = { type, hasStrokes };
   return Object.fromEntries(
     Object.entries(styles)
-      .filter(([key, value]) => !isDefaultStyleEntry(key, value, hasStrokes))
+      .filter(([key, value]) => !isDefaultStyleEntry(key, value, context))
       .map(([key, value]) => [key, pruneStyleEntry(key, value)])
   );
 };
 
 const compactNode = (node: SerializedNode): SerializedNode => {
   const { styles, ...rest } = roundNumbers(node);
-  const pruned = styles ? pruneDefaultStyles(styles) : {};
+  const pruned = styles ? pruneDefaultStyles(styles, node.type) : {};
   return Object.keys(pruned).length > 0 ? { ...rest, styles: pruned as SerializedStyles } : rest;
 };
 
