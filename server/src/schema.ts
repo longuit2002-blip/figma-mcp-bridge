@@ -896,7 +896,18 @@ export const toolInputSchemas = {
 
   get_layout_tree: z.object({
     rootId: createFigmaNodeIdSchema(),
-    maxNodes: z.number().int().min(1).max(10000).optional(),
+    maxNodes: z
+      .number()
+      .int()
+      .min(1)
+      .max(10000)
+      .optional()
+      .describe(
+        "Maximum nodes to return (default 300, default 2000 when verbose); `truncated` reports a cut-off."
+      ),
+    verbose: verboseField(
+      "When true, return the v0.0.25 shape: unrounded numbers, absoluteTransform and absoluteRenderBounds on every node, default maxNodes 2000."
+    ),
     fileKey: fileKeyField,
   }),
 

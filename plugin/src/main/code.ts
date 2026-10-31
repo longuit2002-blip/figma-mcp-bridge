@@ -1,6 +1,7 @@
 import {
   DEFAULT_TREE_DEPTH,
   DEFAULT_TREE_MAX_NODES,
+  roundNumbers,
   serializeNodeShallow,
   serializeTree,
 } from "./serializer";
@@ -12,6 +13,11 @@ import {
   exportScreenshot,
   isScreenshotFormat,
 } from "./screenshot";
+import {
+  COMPACT_LAYOUT_MAX_NODES,
+  VERBOSE_LAYOUT_MAX_NODES,
+  collectLayoutNodes,
+} from "./layout-tree";
 import { getPrototypeConnections, scanPrototype, tracePrototypeFlow } from "./prototype";
 
 type RequestType =
@@ -467,32 +473,11 @@ const requirePrototypes = (toolName: string): void => {
 };
 
 /** Read-only geometry, deliberately independent of screenshot export. */
-async function getLayoutTree(rootId: string, maxNodes = 2000) {
+async function getLayoutTree(rootId: string, maxNodes: number, compact: boolean) {
   const root = await figma.getNodeByIdAsync(rootId);
   if (!root || root.type === "DOCUMENT" || root.type === "PAGE")
     throw new Error("Scene root required");
-  const nodes: unknown[] = [];
-  let truncated = false;
-  function visit(node: SceneNode, depth: number) {
-    if (nodes.length >= maxNodes || depth > 100) {
-      truncated = true;
-      return;
-    }
-    nodes.push({
-      id: node.id,
-      parentId: node.parent?.id,
-      name: node.name,
-      type: node.type,
-      visible: node.visible,
-      localSize: { width: node.width, height: node.height },
-      absoluteTransform: node.absoluteTransform,
-      absoluteBoundingBox: node.absoluteBoundingBox,
-      absoluteRenderBounds: "absoluteRenderBounds" in node ? node.absoluteRenderBounds : null,
-      clipsContent: "clipsContent" in node ? node.clipsContent : false,
-    });
-    if ("children" in node) for (const child of node.children) visit(child, depth + 1);
-  }
-  visit(root, 0);
+  const { nodes, truncated } = collectLayoutNodes(root, maxNodes, compact);
   return {
     schemaVersion: 1,
     snapshotId: new Date().toISOString(),
@@ -505,7 +490,7 @@ async function getLayoutTree(rootId: string, maxNodes = 2000) {
     nodes,
     capture: {
       coordinateSpace: "document-absolute",
-      window: root.absoluteBoundingBox,
+      window: compact ? roundNumbers(root.absoluteBoundingBox) : root.absoluteBoundingBox,
       exportSettings: {
         format: "PNG",
         contentsOnly: true,
@@ -552,12 +537,20 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
           ),
         };
       case "get_layout_tree": {
+        const compact = isCompact(request);
         const rootId = request.nodeIds?.[0];
         if (!rootId) throw new Error("rootId is required");
         return {
           type: request.type,
           requestId: request.requestId,
-          data: await getLayoutTree(rootId, Number(request.params?.maxNodes ?? 2000)),
+          data: await getLayoutTree(
+            rootId,
+            Number(
+              request.params?.maxNodes ??
+                (compact ? COMPACT_LAYOUT_MAX_NODES : VERBOSE_LAYOUT_MAX_NODES)
+            ),
+            compact
+          ),
         };
       }
       case "get_node": {

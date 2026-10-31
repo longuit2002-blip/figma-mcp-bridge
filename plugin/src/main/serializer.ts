@@ -125,7 +125,7 @@ const isMixed = (value: unknown): value is symbol => typeof value === "symbol";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const roundNumbers = <T>(value: T): T => {
+export const roundNumbers = <T>(value: T): T => {
   if (typeof value === "number") return (Math.round(value * DECIMAL_SCALE) / DECIMAL_SCALE) as T;
   if (Array.isArray(value)) return value.map(roundNumbers) as T;
   if (isRecord(value)) {

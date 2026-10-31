@@ -173,11 +173,17 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_layout_tree",
-    "Read absolute node transforms and layout bounds for a capture root. Separate screenshot calls are non-atomic.",
+    "Read absolute node transforms and layout bounds for a capture root. Separate screenshot calls are non-atomic. Default maxNodes is 300. Numbers are rounded to 2 decimals, absoluteTransform is omitted when the node is only translated (absoluteBoundingBox already carries x and y), and absoluteRenderBounds is omitted when it equals absoluteBoundingBox. Pass verbose: true for the v0.0.25 shape (maxNodes default 2000, unrounded, nothing omitted).",
     toolInputSchemas.get_layout_tree.shape,
-    async ({ rootId, maxNodes, fileKey }, extra): Promise<ToolResult> =>
+    async ({ rootId, maxNodes, verbose, fileKey }, extra): Promise<ToolResult> =>
       renderResponse(() =>
-        node.sendWithParams("get_layout_tree", [rootId], { maxNodes }, fileKey, extra.signal)
+        node.sendWithParams(
+          "get_layout_tree",
+          [rootId],
+          { maxNodes, verbose },
+          fileKey,
+          extra.signal
+        )
       )
   );
 
