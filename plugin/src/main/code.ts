@@ -8,12 +8,7 @@ import {
 import { serializeStylePaints } from "./style-paints";
 import type { SerializableNode, SerializedNode, TreeLimits } from "./serializer";
 import { addLayersToFrame } from "../html-figma/figma";
-import {
-  COMPACT_DEFAULT_FORMAT,
-  VERBOSE_DEFAULT_FORMAT,
-  exportScreenshot,
-  isScreenshotFormat,
-} from "./screenshot";
+import { exportScreenshot, isScreenshotFormat } from "./screenshot";
 import {
   COMPACT_LAYOUT_MAX_NODES,
   VERBOSE_LAYOUT_MAX_NODES,
@@ -848,11 +843,7 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
       case "get_screenshot": {
         const compact = isCompact(request);
         const requestedFormat = request.params?.format;
-        const format = isScreenshotFormat(requestedFormat)
-          ? requestedFormat
-          : compact
-            ? COMPACT_DEFAULT_FORMAT
-            : VERBOSE_DEFAULT_FORMAT;
+        const format = isScreenshotFormat(requestedFormat) ? requestedFormat : undefined;
         const scale = typeof request.params?.scale === "number" ? request.params.scale : undefined;
         const clip = request.params?.clip === true;
 

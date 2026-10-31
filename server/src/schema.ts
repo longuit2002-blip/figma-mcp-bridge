@@ -1001,7 +1001,9 @@ export const toolInputSchemas = {
       ),
     format: createExportFormatSchema()
       .optional()
-      .describe("Export format: JPG (default) or PNG or SVG or PDF (default PNG when verbose)"),
+      .describe(
+        "Export format: PNG or SVG or JPG or PDF. When omitted, a node with its own visible opaque fill (frames, components, instances, rectangles) exports as JPG and any other node as PNG so transparency survives; PNG when verbose"
+      ),
     scale: z
       .number()
       .optional()

@@ -273,7 +273,7 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_screenshot",
-    "Export a screenshot of the selected nodes or specific nodes by ID. Raster exports (JPG by default, or PNG) come back as image content blocks, each preceded by a small text block with nodeId, name, format and the exported pixel size. Defaults: JPG, scale 1, longest edge capped at 1568 px; an explicit scale is used as given with no cap. SVG is returned as text. Pass verbose: true for the v0.0.25 shape (one JSON text block with base64, PNG at scale 2, no cap). Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
+    "Export a screenshot of the selected nodes or specific nodes by ID. Raster exports (JPG by default, or PNG) come back as image content blocks, each preceded by a small text block with nodeId, name, format and the exported pixel size. Defaults: JPG for nodes with their own visible opaque fill and PNG for the rest (to keep transparency), scale 1, longest edge capped at 1568 px; an explicit scale is used as given with no cap. SVG is returned as text. Pass verbose: true for the v0.0.25 shape (one JSON text block with base64, PNG at scale 2, no cap). Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_screenshot.shape,
     async ({ nodeIds, format, scale, clip, verbose, fileKey }, extra): Promise<ToolResult> => {
       const params: Record<string, unknown> = {};
