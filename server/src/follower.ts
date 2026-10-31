@@ -1,6 +1,28 @@
 import { followerTimeoutMs } from "./types.js";
 import type { BridgeResponse, ConnectedFile, RPCRequest, RPCResponse } from "./types.js";
 
+const linkSignals = (sources: AbortSignal[]): { signal: AbortSignal; dispose: () => void } => {
+  const controller = new AbortController();
+  const listeners: Array<() => void> = [];
+  const dispose = () => {
+    for (const remove of listeners) remove();
+    listeners.length = 0;
+  };
+  for (const source of sources) {
+    if (source.aborted) {
+      controller.abort(source.reason);
+      break;
+    }
+    const onAbort = () => {
+      controller.abort(source.reason);
+      dispose();
+    };
+    source.addEventListener("abort", onAbort, { once: true });
+    listeners.push(() => source.removeEventListener("abort", onAbort));
+  }
+  return { signal: controller.signal, dispose };
+};
+
 /**
  * Follower proxies MCP tool calls to the leader via HTTP /rpc.
  */
@@ -29,31 +51,36 @@ export class Follower {
     if (fileKey) rpcReq.fileKey = fileKey;
 
     const timeoutSignal = AbortSignal.timeout(followerTimeoutMs(requestType));
-    const response = await fetch(`${this.leaderUrl}/rpc`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(rpcReq),
-      signal: signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal,
-    });
+    const linked = linkSignals(signal ? [timeoutSignal, signal] : [timeoutSignal]);
+    try {
+      const response = await fetch(`${this.leaderUrl}/rpc`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rpcReq),
+        signal: linked.signal,
+      });
 
-    if (!response.ok) {
-      // The leader answers validation failures with a 400 whose body names the
-      // offending field — surface it instead of a bare status code (#35).
-      const body = (await response.json().catch(() => null)) as RPCResponse | null;
-      throw new Error(body?.error ?? `Leader returned status ${response.status}`);
+      if (!response.ok) {
+        // The leader answers validation failures with a 400 whose body names the
+        // offending field — surface it instead of a bare status code (#35).
+        const body = (await response.json().catch(() => null)) as RPCResponse | null;
+        throw new Error(body?.error ?? `Leader returned status ${response.status}`);
+      }
+
+      const rpcResp = (await response.json()) as RPCResponse;
+
+      if (rpcResp.error) {
+        throw new Error(rpcResp.error);
+      }
+
+      return {
+        type: requestType,
+        requestId: "",
+        data: rpcResp.data,
+      };
+    } finally {
+      linked.dispose();
     }
-
-    const rpcResp = (await response.json()) as RPCResponse;
-
-    if (rpcResp.error) {
-      throw new Error(rpcResp.error);
-    }
-
-    return {
-      type: requestType,
-      requestId: "",
-      data: rpcResp.data,
-    };
   }
 
   async listConnectedFiles(): Promise<ConnectedFile[]> {
