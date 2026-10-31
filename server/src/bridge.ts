@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
@@ -26,6 +27,7 @@ export class Bridge {
   private connections = new Map<string, ConnectionEntry>();
   private pending = new Map<string, PendingRequest>();
   private counter = 0;
+  private readonly idPrefix = randomUUID().slice(0, 8);
   private pingTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
@@ -262,7 +264,7 @@ export class Bridge {
     const hh = String(now.getHours()).padStart(2, "0");
     const mm = String(now.getMinutes()).padStart(2, "0");
     const ss = String(now.getSeconds()).padStart(2, "0");
-    return `req-${hh}${mm}${ss}-${this.counter}`;
+    return `req-${this.idPrefix}-${hh}${mm}${ss}-${this.counter}`;
   }
 
   close(): void {
