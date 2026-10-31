@@ -1,4 +1,4 @@
-import { serializeNode } from "./serializer";
+import { serializeNode, serializeNodeShallow } from "./serializer";
 import type { SerializableNode } from "./serializer";
 import { addLayersToFrame } from "../html-figma/figma";
 import { getPrototypeConnections, scanPrototype, tracePrototypeFlow } from "./prototype";
@@ -678,46 +678,31 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
       }
       case "get_design_context": {
         const depth = typeof request.params?.depth === "number" ? request.params.depth : 2;
-        const serializeWithDepth = async (
+        const serializeWithDepth = (
           node: SerializableNode,
           currentDepth: number
-        ): Promise<ReturnType<typeof serializeNode>> => {
-          const serialized = serializeNode(node);
-          if (currentDepth >= depth && serialized.children) {
-            // Truncate children at depth limit, but show count
+        ): ReturnType<typeof serializeNode> => {
+          const serialized = serializeNodeShallow(node);
+          if (!("children" in node)) return serialized;
+          const visibleChildren = node.children.filter((child) => child.visible !== false);
+          if (currentDepth >= depth) {
             return {
               ...serialized,
               children: undefined,
-              childCount:
-                (node as ChildrenMixin & SceneNode).children?.filter((c) => c.visible !== false)
-                  .length ?? 0,
+              childCount: visibleChildren.length,
             } as ReturnType<typeof serializeNode> & { childCount: number };
           }
-          if (serialized.children) {
-            const childNodes = await Promise.all(
-              serialized.children.map((child) => figma.getNodeByIdAsync(child.id))
-            );
-            const serializedChildren = await Promise.all(
-              childNodes
-                .filter(
-                  (n): n is SceneNode =>
-                    n !== null && n.type !== "DOCUMENT" && "visible" in n && n.visible !== false
-                )
-                .map((n) => serializeWithDepth(n, currentDepth + 1))
-            );
-            return {
-              ...serialized,
-              children: serializedChildren,
-            };
-          }
-          return serialized;
+          return {
+            ...serialized,
+            children: visibleChildren.map((child) => serializeWithDepth(child, currentDepth + 1)),
+          };
         };
 
         const selection = figma.currentPage.selection;
         const contextNodes =
           selection.length > 0
-            ? await Promise.all(selection.map((node) => serializeWithDepth(node, 0)))
-            : [await serializeWithDepth(figma.currentPage, 0)];
+            ? selection.map((node) => serializeWithDepth(node, 0))
+            : [serializeWithDepth(figma.currentPage, 0)];
 
         return {
           type: request.type,

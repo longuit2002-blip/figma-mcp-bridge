@@ -353,7 +353,7 @@ const serializeStyles = (node: SerializableNode): SerializedStyles => {
  */
 export type SerializableNode = SceneNode | PageNode;
 
-export const serializeNode = (node: SerializableNode): SerializedNode => {
+export const serializeNodeShallow = (node: SerializableNode): SerializedNode => {
   const base: SerializedNode = {
     id: node.id,
     name: node.name,
@@ -379,14 +379,18 @@ export const serializeNode = (node: SerializableNode): SerializedNode => {
     }
   }
 
+  return base;
+};
+
+export const serializeNode = (node: SerializableNode): SerializedNode => {
+  const shallow = serializeNodeShallow(node);
   if ("children" in node) {
     return {
-      ...base,
+      ...shallow,
       children: node.children
         .filter((child) => child.visible !== false)
         .map((child) => serializeNode(child)),
     };
   }
-
-  return base;
+  return shallow;
 };
