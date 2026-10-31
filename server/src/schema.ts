@@ -94,6 +94,9 @@ const fileKeyField = z
 
 const verboseField = (description: string) => z.boolean().optional().describe(description);
 
+const COMPACT_NODE_VERBOSE_DESCRIPTION =
+  "When true, return every property including defaults and unrounded numbers (the v0.0.25 shape). Default false omits default-valued properties (visible true, opacity 1, empty fills/strokes/effects, cornerRadius 0, MIN/MIN constraints, and similar) and rounds numbers to 2 decimals.";
+
 const gradientStop = z.object({
   position: z
     .number()
@@ -858,10 +861,12 @@ export const duplicateWithOffsetInput = z.object({
 
 export const toolInputSchemas = {
   get_document: z.object({
+    verbose: verboseField(COMPACT_NODE_VERBOSE_DESCRIPTION),
     fileKey: fileKeyField,
   }),
 
   get_selection: z.object({
+    verbose: verboseField(COMPACT_NODE_VERBOSE_DESCRIPTION),
     fileKey: fileKeyField,
   }),
 
@@ -881,6 +886,7 @@ export const toolInputSchemas = {
       .describe(
         "When true, adds a `prototype` field with the reactions on this node and its descendants (the scan get_prototype_connections returns). Not available in FigJam."
       ),
+    verbose: verboseField(COMPACT_NODE_VERBOSE_DESCRIPTION),
     fileKey: fileKeyField,
   }),
 
@@ -938,6 +944,7 @@ export const toolInputSchemas = {
       .number()
       .optional()
       .describe("How many levels deep to traverse the node tree (default 2)"),
+    verbose: verboseField(COMPACT_NODE_VERBOSE_DESCRIPTION),
     fileKey: fileKeyField,
   }),
 

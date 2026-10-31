@@ -514,6 +514,8 @@ async function getLayoutTree(rootId: string, maxNodes = 2000) {
   };
 }
 
+const isCompact = (request: ServerRequest): boolean => request.params?.verbose !== true;
+
 const handleRequest = async (request: ServerRequest): Promise<PluginResponse> => {
   try {
     if (EDIT_REQUEST_TYPES.has(request.type)) {
@@ -524,13 +526,13 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
         return {
           type: request.type,
           requestId: request.requestId,
-          data: serializeNode(figma.currentPage),
+          data: serializeNode(figma.currentPage, isCompact(request)),
         };
       case "get_selection":
         return {
           type: request.type,
           requestId: request.requestId,
-          data: figma.currentPage.selection.map((node) => serializeNode(node)),
+          data: figma.currentPage.selection.map((node) => serializeNode(node, isCompact(request))),
         };
       case "get_layout_tree": {
         const rootId = request.nodeIds?.[0];
@@ -550,7 +552,7 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
         if (!node || node.type === "DOCUMENT") {
           throw new Error(`Node not found: ${nodeId}`);
         }
-        const data = serializeNode(node as SceneNode);
+        const data = serializeNode(node as SceneNode, isCompact(request));
         if (!request.params?.includePrototype) {
           return { type: request.type, requestId: request.requestId, data };
         }
@@ -692,11 +694,12 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
       }
       case "get_design_context": {
         const depth = typeof request.params?.depth === "number" ? request.params.depth : 2;
+        const compact = isCompact(request);
         const serializeWithDepth = (
           node: SerializableNode,
           currentDepth: number
         ): ReturnType<typeof serializeNode> => {
-          const serialized = serializeNodeShallow(node);
+          const serialized = serializeNodeShallow(node, compact);
           if (!("children" in node)) return serialized;
           const visibleChildren = node.children.filter((child) => child.visible !== false);
           if (currentDepth >= depth) {
@@ -824,7 +827,7 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
         };
       }
       case "get_screenshot": {
-        const compact = request.params?.verbose !== true;
+        const compact = isCompact(request);
         const requestedFormat = request.params?.format;
         const format = isScreenshotFormat(requestedFormat)
           ? requestedFormat

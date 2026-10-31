@@ -147,19 +147,23 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_document",
-    "Get the current Figma/FigJam page document tree. When multiple files are connected, specify fileKey.",
+    "Get the current Figma/FigJam page document tree. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_document.shape,
-    async ({ fileKey }, extra): Promise<ToolResult> => {
-      return renderResponse(() => node.send("get_document", undefined, fileKey, extra.signal));
+    async ({ verbose, fileKey }, extra): Promise<ToolResult> => {
+      return renderResponse(() =>
+        node.sendWithParams("get_document", undefined, { verbose }, fileKey, extra.signal)
+      );
     }
   );
 
   server.tool(
     "get_selection",
-    "Get the currently selected nodes in Figma/FigJam. When multiple files are connected, specify fileKey.",
+    "Get the currently selected nodes in Figma/FigJam. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_selection.shape,
-    async ({ fileKey }, extra): Promise<ToolResult> => {
-      return renderResponse(() => node.send("get_selection", undefined, fileKey, extra.signal));
+    async ({ verbose, fileKey }, extra): Promise<ToolResult> => {
+      return renderResponse(() =>
+        node.sendWithParams("get_selection", undefined, { verbose }, fileKey, extra.signal)
+      );
     }
   );
 
@@ -175,7 +179,7 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_node",
-    "Get a specific Figma/FigJam node by ID. Accepts top-level IDs like '4029:12345' and instance-child IDs like 'I12740:17806;12740:17793'. Never use hyphens. Pass includePrototype: true to also get the prototype interactions on the node and its descendants. When multiple files are connected, specify fileKey.",
+    "Get a specific Figma/FigJam node by ID. Accepts top-level IDs like '4029:12345' and instance-child IDs like 'I12740:17806;12740:17793'. Never use hyphens. Pass includePrototype: true to also get the prototype interactions on the node and its descendants. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_node.shape,
     async ({ nodeId, fileKey, ...params }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
@@ -232,13 +236,14 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_design_context",
-    "Get the design context for the current selection or page. Returns a summarized tree structure optimized for understanding the current design context. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
+    "Get the design context for the current selection or page. Returns a summarized tree structure optimized for understanding the current design context. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_design_context.shape,
-    async ({ depth, fileKey }, extra): Promise<ToolResult> => {
+    async ({ depth, verbose, fileKey }, extra): Promise<ToolResult> => {
       const params: Record<string, unknown> = {};
       if (depth !== undefined && depth > 0) {
         params.depth = depth;
       }
+      if (verbose !== undefined) params.verbose = verbose;
       return renderResponse(() =>
         node.sendWithParams("get_design_context", undefined, params, fileKey, extra.signal)
       );
