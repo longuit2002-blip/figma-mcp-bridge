@@ -158,6 +158,13 @@ const serializeVariableValue = (value: VariableValue): unknown => {
   return value;
 };
 
+const createVariableLookup = async () => {
+  const localVariables = await figma.variables.getLocalVariablesAsync();
+  const variablesById = new Map(localVariables.map((variable) => [variable.id, variable]));
+  return async (id: string): Promise<Variable | null> =>
+    variablesById.get(id) ?? (await figma.variables.getVariableByIdAsync(id));
+};
+
 const isSceneNode = (node: BaseNode | null): node is SceneNode =>
   node !== null && node.type !== "DOCUMENT" && node.type !== "PAGE";
 
@@ -723,10 +730,11 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
           // FigJam may not support the full variables API.
           try {
             const collections = await figma.variables.getLocalVariableCollectionsAsync();
+            const lookupVariable = await createVariableLookup();
             const variableData = await Promise.all(
               collections.map(async (collection) => {
                 const variables = await Promise.all(
-                  collection.variableIds.map((id) => figma.variables.getVariableByIdAsync(id))
+                  collection.variableIds.map((id) => lookupVariable(id))
                 );
                 return {
                   id: collection.id,
@@ -771,10 +779,11 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
         }
 
         const collections = await figma.variables.getLocalVariableCollectionsAsync();
+        const lookupVariable = await createVariableLookup();
         const variableData = await Promise.all(
           collections.map(async (collection) => {
             const variables = await Promise.all(
-              collection.variableIds.map((id) => figma.variables.getVariableByIdAsync(id))
+              collection.variableIds.map((id) => lookupVariable(id))
             );
             return {
               id: collection.id,
