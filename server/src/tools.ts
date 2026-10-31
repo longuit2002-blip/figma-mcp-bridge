@@ -148,7 +148,7 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_document",
-    "Get the current Figma/FigJam page document tree. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. Traversal is bounded by depth (default 3) and maxNodes (default 500), with verbose: true and no explicit depth or maxNodes the whole tree is returned, as in v0.0.25. A node whose children were cut off reports childCount and truncated: true; call get_node with that node id to expand it. When multiple files are connected, specify fileKey.",
+    "Get the current Figma/FigJam page document tree. Output is compact by default: default-valued properties are omitted and numbers are rounded (2 decimals, 3 for opacity and gradient positions); pass verbose: true for every property. Traversal is bounded by depth (default 3) and maxNodes (default 500), with verbose: true and no explicit depth or maxNodes the whole tree is returned, as in v0.0.25. A node whose children were cut off reports childCount and truncated: true; call get_node with that node id to expand it. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_document.shape,
     async ({ fileKey, ...params }, extra): Promise<ToolResult> => {
       return renderTreeResponse(() =>
@@ -159,7 +159,7 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_selection",
-    "Get the currently selected nodes in Figma/FigJam. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. Traversal is bounded by depth (default 3) and maxNodes (default 500), with verbose: true and no explicit depth or maxNodes the whole tree is returned, as in v0.0.25. A node whose children were cut off reports childCount and truncated: true; call get_node with that node id to expand it. When multiple files are connected, specify fileKey.",
+    "Get the currently selected nodes in Figma/FigJam. Output is compact by default: default-valued properties are omitted and numbers are rounded (2 decimals, 3 for opacity and gradient positions); pass verbose: true for every property. Traversal is bounded by depth (default 3) and maxNodes (default 500), with verbose: true and no explicit depth or maxNodes the whole tree is returned, as in v0.0.25. A node whose children were cut off reports childCount and truncated: true; call get_node with that node id to expand it. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_selection.shape,
     async ({ fileKey, ...params }, extra): Promise<ToolResult> => {
       return renderTreeResponse(() =>
@@ -186,7 +186,7 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_node",
-    "Get a specific Figma/FigJam node by ID. Accepts top-level IDs like '4029:12345' and instance-child IDs like 'I12740:17806;12740:17793'. Never use hyphens. Pass includePrototype: true to also get the prototype interactions on the node and its descendants. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. Traversal is bounded by depth (default 3) and maxNodes (default 500), with verbose: true and no explicit depth or maxNodes the whole tree is returned, as in v0.0.25. A node whose children were cut off reports childCount and truncated: true; call get_node with that node id to expand it. When multiple files are connected, specify fileKey.",
+    "Get a specific Figma/FigJam node by ID. Accepts top-level IDs like '4029:12345' and instance-child IDs like 'I12740:17806;12740:17793'. Never use hyphens. Pass includePrototype: true to also get the prototype interactions on the node and its descendants. Output is compact by default: default-valued properties are omitted and numbers are rounded (2 decimals, 3 for opacity and gradient positions); pass verbose: true for every property. Traversal is bounded by depth (default 3) and maxNodes (default 500), with verbose: true and no explicit depth or maxNodes the whole tree is returned, as in v0.0.25. A node whose children were cut off reports childCount and truncated: true; call get_node with that node id to expand it. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_node.shape,
     async ({ nodeId, fileKey, ...params }, extra): Promise<ToolResult> => {
       return renderTreeResponse(() =>
@@ -245,7 +245,7 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_design_context",
-    "Get the design context for the current selection or page. Returns a summarized tree structure optimized for understanding the current design context. Output is compact by default: default-valued properties are omitted and numbers are rounded to 2 decimals; pass verbose: true for every property. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
+    "Get the design context for the current selection or page. Returns a summarized tree structure optimized for understanding the current design context. Output is compact by default: default-valued properties are omitted and numbers are rounded (2 decimals, 3 for opacity and gradient positions); pass verbose: true for every property. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_design_context.shape,
     async ({ depth, verbose, fileKey }, extra): Promise<ToolResult> => {
       const params: Record<string, unknown> = {};

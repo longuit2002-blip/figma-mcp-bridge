@@ -1,9 +1,8 @@
-import { roundNumbers, toHex } from "./serializer";
+import { isRecord } from "./guards";
+import { roundNumbers } from "./rounding";
+import { toHex } from "./serializer";
 
 type BoundVariableIds = Record<string, string | string[]>;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const readAliasId = (alias: unknown): string | undefined =>
   isRecord(alias) && typeof alias.id === "string" ? alias.id : undefined;

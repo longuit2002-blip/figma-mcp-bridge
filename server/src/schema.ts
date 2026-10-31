@@ -115,7 +115,7 @@ const treeMaxNodesField = z
   );
 
 const COMPACT_NODE_VERBOSE_DESCRIPTION =
-  "When true, return every property including defaults and unrounded numbers (the v0.0.25 shape). Default false omits default-valued properties (visible true, opacity 1, empty fills/strokes/effects, cornerRadius 0, MIN/MIN constraints, and similar) and rounds numbers to 2 decimals.";
+  "When true, return every property including defaults and unrounded numbers (the v0.0.25 shape). Default false omits default-valued properties (visible true, opacity 1, empty fills/strokes/effects, cornerRadius 0, MIN/MIN constraints, and similar) and rounds numbers (2 decimals, 3 for opacity and gradient positions).";
 
 const gradientStop = z.object({
   position: z

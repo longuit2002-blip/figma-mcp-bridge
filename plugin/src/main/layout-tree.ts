@@ -1,4 +1,4 @@
-import { roundNumbers } from "./serializer";
+import { roundNumbers } from "./rounding";
 
 export const COMPACT_LAYOUT_MAX_NODES = 300;
 export const VERBOSE_LAYOUT_MAX_NODES = 2000;

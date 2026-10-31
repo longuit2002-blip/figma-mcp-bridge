@@ -1,10 +1,10 @@
 import {
   DEFAULT_TREE_DEPTH,
   DEFAULT_TREE_MAX_NODES,
-  roundNumbers,
   serializeNodeShallow,
   serializeTree,
 } from "./serializer";
+import { roundNumbers } from "./rounding";
 import { serializeStylePaints } from "./style-paints";
 import type { SerializableNode, SerializedNode, TreeLimits, TreeTruncation } from "./serializer";
 import { addLayersToFrame } from "../html-figma/figma";

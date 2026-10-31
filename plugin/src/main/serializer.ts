@@ -1,3 +1,6 @@
+import { isRecord } from "./guards";
+import { roundNumbers } from "./rounding";
+
 // --- Serialized paint types (discriminated union) ---
 type SerializedSolidPaint = {
   type: "SOLID";
@@ -103,7 +106,6 @@ export const DEFAULT_TREE_DEPTH = 3;
 export const DEFAULT_TREE_MAX_NODES = 500;
 const YIELD_INTERVAL = 200;
 
-const DECIMAL_SCALE = 100;
 const DEFAULT_STYLE_VALUES: Readonly<Record<string, readonly unknown[]>> = {
   visible: [true],
   opacity: [1],
@@ -122,23 +124,6 @@ const DEFAULT_AUTO_LAYOUT_VALUES: Readonly<Record<string, readonly unknown[]>> =
 
 const isMixed = (value: unknown): value is symbol => typeof value === "symbol";
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-export const roundNumbers = <T>(value: T): T => {
-  if (typeof value === "number") return (Math.round(value * DECIMAL_SCALE) / DECIMAL_SCALE) as T;
-  if (Array.isArray(value)) return value.map(roundNumbers) as T;
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, roundNumbers(entry)])
-    ) as T;
-  }
-  return value;
-};
-
-const omitOpacityOne = (opacity: number | undefined, compact: boolean): { opacity?: number } =>
-  compact && (opacity === undefined || opacity === 1) ? {} : { opacity };
-
 export const toHex = (color: RGB): string => {
   const clamp = (value: number) => Math.min(255, Math.max(0, Math.round(value * 255)));
   const [r, g, b] = [clamp(color.r), clamp(color.g), clamp(color.b)];
@@ -155,8 +140,7 @@ const serializeGradientStops = (
   }));
 
 const serializePaints = (
-  paints: readonly Paint[] | symbol | undefined,
-  compact = false
+  paints: readonly Paint[] | symbol | undefined
 ): SerializedPaint[] | "mixed" => {
   if (isMixed(paints)) return "mixed";
   if (!paints || !Array.isArray(paints)) return [];
@@ -170,7 +154,7 @@ const serializePaints = (
             {
               type: "SOLID",
               color: toHex(paint.color),
-              ...omitOpacityOne(paint.opacity, compact),
+              opacity: paint.opacity,
             },
           ];
         case "GRADIENT_LINEAR":
@@ -182,7 +166,7 @@ const serializePaints = (
               type: paint.type,
               gradientStops: serializeGradientStops(paint.gradientStops),
               gradientTransform: paint.gradientTransform,
-              ...omitOpacityOne(paint.opacity, compact),
+              opacity: paint.opacity,
             },
           ];
         case "IMAGE":
@@ -192,7 +176,7 @@ const serializePaints = (
               scaleMode: paint.scaleMode,
               imageHash: paint.imageHash,
               imageTransform: paint.imageTransform,
-              ...omitOpacityOne(paint.opacity, compact),
+              opacity: paint.opacity,
             },
           ];
         default:
@@ -201,7 +185,7 @@ const serializePaints = (
     });
 };
 
-const serializeEffects = (effects: readonly Effect[], compact = false): SerializedEffect[] =>
+const serializeEffects = (effects: readonly Effect[]): SerializedEffect[] =>
   effects
     .filter((effect) => effect.visible !== false)
     .flatMap((effect): SerializedEffect[] => {
@@ -215,8 +199,8 @@ const serializeEffects = (effects: readonly Effect[], compact = false): Serializ
               opacity: effect.color.a,
               offset: effect.offset,
               radius: effect.radius,
-              spread: compact && !effect.spread ? undefined : effect.spread,
-              blendMode: compact && effect.blendMode === "NORMAL" ? undefined : effect.blendMode,
+              spread: effect.spread,
+              blendMode: effect.blendMode,
             },
           ];
         case "LAYER_BLUR":
@@ -281,7 +265,7 @@ const serializeText = (node: TextNode, base: SerializedNode) => {
   };
 };
 
-const serializeStyles = (node: SerializableNode, compact: boolean): SerializedStyles => {
+const serializeStyles = (node: SerializableNode): SerializedStyles => {
   const styles: SerializedStyles = {};
 
   if ("opacity" in node) {
@@ -295,10 +279,10 @@ const serializeStyles = (node: SerializableNode, compact: boolean): SerializedSt
   }
 
   if ("fills" in node) {
-    styles.fills = serializePaints(node.fills, compact);
+    styles.fills = serializePaints(node.fills);
   }
   if ("strokes" in node) {
-    styles.strokes = serializePaints(node.strokes, compact);
+    styles.strokes = serializePaints(node.strokes);
   }
   if ("strokeWeight" in node) {
     styles.strokeWeight = isMixed(node.strokeWeight) ? "mixed" : (node.strokeWeight as number);
@@ -316,7 +300,7 @@ const serializeStyles = (node: SerializableNode, compact: boolean): SerializedSt
   if ("effects" in node) {
     const effects = node.effects as readonly Effect[];
     if (effects.length > 0) {
-      styles.effects = serializeEffects(effects, compact);
+      styles.effects = serializeEffects(effects);
     }
   }
 
@@ -425,6 +409,29 @@ const pruneAutoLayout = (value: unknown): unknown => {
   );
 };
 
+const omitKeys = (value: Record<string, unknown>, keys: readonly string[]) =>
+  Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
+
+const prunePaint = (paint: unknown): unknown =>
+  isRecord(paint) && paint.opacity === 1 ? omitKeys(paint, ["opacity"]) : paint;
+
+const pruneEffect = (effect: unknown): unknown => {
+  if (!isRecord(effect)) return effect;
+  const redundant = [
+    ...(!effect.spread ? ["spread"] : []),
+    ...(effect.blendMode === "NORMAL" ? ["blendMode"] : []),
+  ];
+  return omitKeys(effect, redundant);
+};
+
+const pruneStyleEntry = (key: string, value: unknown): unknown => {
+  if (key === "autoLayout") return pruneAutoLayout(value);
+  if (!Array.isArray(value)) return value;
+  if (key === "fills" || key === "strokes") return value.map(prunePaint);
+  if (key === "effects") return value.map(pruneEffect);
+  return value;
+};
+
 const pruneDefaultStyles = (styles: Record<string, unknown>): Record<string, unknown> => {
   const hasStrokes = Array.isArray(styles.strokes)
     ? styles.strokes.length > 0
@@ -432,16 +439,14 @@ const pruneDefaultStyles = (styles: Record<string, unknown>): Record<string, unk
   return Object.fromEntries(
     Object.entries(styles)
       .filter(([key, value]) => !isDefaultStyleEntry(key, value, hasStrokes))
-      .map(([key, value]) => [key, key === "autoLayout" ? pruneAutoLayout(value) : value])
+      .map(([key, value]) => [key, pruneStyleEntry(key, value)])
   );
 };
 
 const compactNode = (node: SerializedNode): SerializedNode => {
-  const { styles, ...rest } = node;
+  const { styles, ...rest } = roundNumbers(node);
   const pruned = styles ? pruneDefaultStyles(styles) : {};
-  const compacted =
-    Object.keys(pruned).length > 0 ? { ...rest, styles: pruned as SerializedStyles } : rest;
-  return roundNumbers(compacted);
+  return Object.keys(pruned).length > 0 ? { ...rest, styles: pruned as SerializedStyles } : rest;
 };
 
 /**
@@ -451,13 +456,13 @@ const compactNode = (node: SerializedNode): SerializedNode => {
  */
 export type SerializableNode = SceneNode | PageNode;
 
-const buildShallowNode = (node: SerializableNode, compact: boolean): SerializedNode => {
+const buildShallowNode = (node: SerializableNode): SerializedNode => {
   const base: SerializedNode = {
     id: node.id,
     name: node.name,
     type: node.type,
     bounds: getBounds(node),
-    styles: serializeStyles(node, compact),
+    styles: serializeStyles(node),
   };
 
   // Handle Figma TEXT nodes and FigJam STICKY / SHAPE_WITH_TEXT nodes (which
@@ -481,7 +486,7 @@ const buildShallowNode = (node: SerializableNode, compact: boolean): SerializedN
 };
 
 export const serializeNodeShallow = (node: SerializableNode, compact = false): SerializedNode => {
-  const shallow = buildShallowNode(node, compact);
+  const shallow = buildShallowNode(node);
   return compact ? compactNode(shallow) : shallow;
 };
 
