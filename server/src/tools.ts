@@ -52,9 +52,17 @@ const IMAGE_FETCH_TIMEOUT_MS = 15_000;
 const MAX_IMAGE_REDIRECTS = 5;
 const SAVE_SCREENSHOTS_CONCURRENCY = 3;
 
+type ToolContent =
+  { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
+
 type ToolResult = {
-  content: Array<{ type: "text"; text: string }>;
+  content: ToolContent[];
   isError?: boolean;
+};
+
+const RASTER_MIME_TYPES: Partial<Record<ExportFormat, string>> = {
+  PNG: "image/png",
+  JPG: "image/jpeg",
 };
 
 export type ExportFormat = "PNG" | "SVG" | "JPG" | "PDF";
@@ -248,15 +256,17 @@ export function registerTools(server: McpServer, node: Node, port: number): void
 
   server.tool(
     "get_screenshot",
-    "Export a screenshot of the selected nodes or specific nodes by ID. Returns base64-encoded image data. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
+    "Export a screenshot of the selected nodes or specific nodes by ID. Raster exports (JPG by default, or PNG) come back as image content blocks, each preceded by a small text block with nodeId, name, format and the exported pixel size. Defaults: JPG, scale 1, longest edge capped at 1568 px; an explicit scale is used as given with no cap. SVG is returned as text. Pass verbose: true for the v0.0.25 shape (one JSON text block with base64, PNG at scale 2, no cap). Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_screenshot.shape,
-    async ({ nodeIds, format, scale, clip, fileKey }, extra): Promise<ToolResult> => {
+    async ({ nodeIds, format, scale, clip, verbose, fileKey }, extra): Promise<ToolResult> => {
       const params: Record<string, unknown> = {};
       if (format) params.format = format;
       if (scale !== undefined && scale > 0) params.scale = scale;
       if (clip !== undefined) params.clip = clip;
-      return renderResponse(() =>
-        node.sendWithParams("get_screenshot", nodeIds, params, fileKey, extra.signal)
+      if (verbose !== undefined) params.verbose = verbose;
+      return renderScreenshotResponse(
+        () => node.sendWithParams("get_screenshot", nodeIds, params, fileKey, extra.signal),
+        verbose === true
       );
     }
   );
@@ -1029,6 +1039,55 @@ async function renderResponse(fn: () => Promise<BridgeResponse>): Promise<ToolRe
 }
 
 /**
+ * Converts the plugin's screenshot exports into MCP content blocks: a metadata
+ * text block per export followed by an image block for JPG/PNG or the markup
+ * for SVG. PDF has no MCP image type, so it keeps the base64-in-JSON form.
+ * @param fn - Bridge call to execute.
+ * @param verbose - When true, return the raw JSON payload exactly as before.
+ * @returns Tool result with content blocks or an error message.
+ */
+async function renderScreenshotResponse(
+  fn: () => Promise<BridgeResponse>,
+  verbose: boolean
+): Promise<ToolResult> {
+  try {
+    const resp = await fn();
+    if (resp.error) {
+      return { content: [{ type: "text", text: resp.error }], isError: true };
+    }
+    const exports = (resp.data as { exports?: ScreenshotExport[] } | undefined)?.exports;
+    if (verbose || !Array.isArray(exports)) {
+      return { content: [{ type: "text", text: JSON.stringify(resp.data) }] };
+    }
+    return { content: exports.flatMap(toScreenshotContent) };
+  } catch (err) {
+    return {
+      content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }],
+      isError: true,
+    };
+  }
+}
+
+function toScreenshotContent(screenshot: ScreenshotExport): ToolContent[] {
+  const { nodeId, nodeName, format, base64, width, height } = screenshot;
+  const meta = { nodeId, name: nodeName, format, width, height };
+  const mimeType = RASTER_MIME_TYPES[format];
+  if (mimeType) {
+    return [
+      { type: "text", text: JSON.stringify(meta) },
+      { type: "image", data: base64, mimeType },
+    ];
+  }
+  if (format === "SVG") {
+    return [
+      { type: "text", text: JSON.stringify(meta) },
+      { type: "text", text: Buffer.from(base64, "base64").toString("utf8") },
+    ];
+  }
+  return [{ type: "text", text: JSON.stringify({ ...meta, base64 }) }];
+}
+
+/**
  * Parses raw tool arguments with a Zod schema and returns a typed result or a tool error.
  * @param schema - Zod schema to validate against.
  * @param args - Raw arguments from the MCP client.
@@ -1545,7 +1604,7 @@ async function saveScreenshotItemToFile(
     const resolvedScale = resolveScale(item.scale, defaultScale);
     const resolvedClip = item.clip ?? defaultClip;
 
-    const params: Record<string, unknown> = { format: resolvedFormat };
+    const params: Record<string, unknown> = { format: resolvedFormat, verbose: true };
     if (resolvedScale !== undefined) {
       params.scale = resolvedScale;
     }

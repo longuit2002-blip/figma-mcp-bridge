@@ -1,6 +1,12 @@
 import { serializeNode, serializeNodeShallow } from "./serializer";
 import type { SerializableNode } from "./serializer";
 import { addLayersToFrame } from "../html-figma/figma";
+import {
+  COMPACT_DEFAULT_FORMAT,
+  VERBOSE_DEFAULT_FORMAT,
+  exportScreenshot,
+  isScreenshotFormat,
+} from "./screenshot";
 import { getPrototypeConnections, scanPrototype, tracePrototypeFlow } from "./prototype";
 
 type RequestType =
@@ -61,6 +67,7 @@ type RequestType =
 type ServerRequestParams = Record<string, unknown> & {
   format?: "PNG" | "SVG" | "JPG" | "PDF";
   scale?: number;
+  verbose?: boolean;
   /**
    * When true, export the node using its absolute bounds (the same behavior
    * exposed by Figma REST image export via `use_absolute_bounds`). This clips
@@ -817,14 +824,14 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
         };
       }
       case "get_screenshot": {
-        const format =
-          request.params?.format === "SVG" ||
-          request.params?.format === "PDF" ||
-          request.params?.format === "JPG" ||
-          request.params?.format === "PNG"
-            ? request.params.format
-            : "PNG";
-        const scale = typeof request.params?.scale === "number" ? request.params.scale : 2;
+        const compact = request.params?.verbose !== true;
+        const requestedFormat = request.params?.format;
+        const format = isScreenshotFormat(requestedFormat)
+          ? requestedFormat
+          : compact
+            ? COMPACT_DEFAULT_FORMAT
+            : VERBOSE_DEFAULT_FORMAT;
+        const scale = typeof request.params?.scale === "number" ? request.params.scale : undefined;
         const clip = request.params?.clip === true;
 
         // Determine which node(s) to export
@@ -844,36 +851,7 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
         }
 
         const exports = await Promise.all(
-          targetNodes.map(async (node) => {
-            const commonSettings = clip ? { contentsOnly: true, useAbsoluteBounds: true } : {};
-            const settings: ExportSettings =
-              format === "SVG"
-                ? { format: "SVG", ...commonSettings }
-                : format === "PDF"
-                  ? { format: "PDF", ...commonSettings }
-                  : format === "JPG"
-                    ? {
-                        format: "JPG",
-                        constraint: { type: "SCALE", value: scale },
-                        ...commonSettings,
-                      }
-                    : {
-                        format: "PNG",
-                        constraint: { type: "SCALE", value: scale },
-                        ...commonSettings,
-                      };
-
-            const bytes = await node.exportAsync(settings);
-            const base64 = figma.base64Encode(bytes);
-            return {
-              nodeId: node.id,
-              nodeName: node.name,
-              format,
-              base64,
-              width: node.width,
-              height: node.height,
-            };
-          })
+          targetNodes.map((node) => exportScreenshot(node, { format, scale, clip, compact }))
         );
 
         return {

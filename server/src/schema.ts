@@ -92,6 +92,8 @@ const fileKeyField = z
     "The fileKey of the Figma file to query. Required when multiple files are connected. Use list_files to see connected files."
   );
 
+const verboseField = (description: string) => z.boolean().optional().describe(description);
+
 const gradientStop = z.object({
   position: z
     .number()
@@ -952,14 +954,22 @@ export const toolInputSchemas = {
       ),
     format: createExportFormatSchema()
       .optional()
-      .describe("Export format: PNG (default) or SVG or JPG or PDF"),
-    scale: z.number().optional().describe("Export scale for raster formats (default 2)"),
+      .describe("Export format: JPG (default) or PNG or SVG or PDF (default PNG when verbose)"),
+    scale: z
+      .number()
+      .optional()
+      .describe(
+        "Export scale for raster formats. Default 1, lowered so the longest edge stays within 1568 px. An explicit scale is used as given with no cap. Default 2 with no cap when verbose."
+      ),
     clip: z
       .boolean()
       .optional()
       .describe(
         "When true, export using Figma's absolute node bounds (REST use_absolute_bounds / plugin useAbsoluteBounds) so PNGs are clipped to the node's logical bounds"
       ),
+    verbose: verboseField(
+      "When true, return the v0.0.25 shape: one JSON text block with base64 embedded, PNG at scale 2 by default, no size cap."
+    ),
     fileKey: fileKeyField,
   }),
 
