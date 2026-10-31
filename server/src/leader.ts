@@ -96,6 +96,10 @@ export class Leader {
 
   private handleRPC(req: http.IncomingMessage, res: http.ServerResponse): void {
     const chunks: Buffer[] = [];
+    const abortController = new AbortController();
+    res.on("close", () => {
+      if (!res.writableFinished) abortController.abort();
+    });
     req.on("data", (chunk: Buffer) => {
       chunks.push(chunk);
     });
@@ -144,7 +148,14 @@ export class Leader {
               requestType: string,
               nodeIds?: string[],
               sendParams?: Record<string, unknown>
-            ) => this.bridge.sendWithParams(requestType, nodeIds, sendParams, fileKey),
+            ) =>
+              this.bridge.sendWithParams(
+                requestType,
+                nodeIds,
+                sendParams,
+                fileKey,
+                abortController.signal
+              ),
           };
           const result = await executeSaveScreenshots(
             sender,
@@ -161,7 +172,8 @@ export class Leader {
           rpcReq.tool,
           rpcReq.nodeIds,
           validatedParams,
-          fileKey
+          fileKey,
+          abortController.signal
         );
 
         this.sendJSON(res, 200, resp.error ? { error: resp.error } : { data: resp.data });
