@@ -34,20 +34,26 @@ export class Node {
     }
   }
 
-  send(requestType: string, nodeIds?: string[], fileKey?: string): Promise<BridgeResponse> {
-    return this.sendWithParams(requestType, nodeIds, undefined, fileKey);
+  send(
+    requestType: string,
+    nodeIds?: string[],
+    fileKey?: string,
+    signal?: AbortSignal
+  ): Promise<BridgeResponse> {
+    return this.sendWithParams(requestType, nodeIds, undefined, fileKey, signal);
   }
 
   sendWithParams(
     requestType: string,
     nodeIds?: string[],
     params?: Record<string, unknown>,
-    fileKey?: string
+    fileKey?: string,
+    signal?: AbortSignal
   ): Promise<BridgeResponse> {
     if (this._role === Role.Leader && this.leader) {
-      return this.leader.getBridge().sendWithParams(requestType, nodeIds, params, fileKey);
+      return this.leader.getBridge().sendWithParams(requestType, nodeIds, params, fileKey, signal);
     }
-    return this.follower.sendWithParams(requestType, nodeIds, params, fileKey);
+    return this.follower.sendWithParams(requestType, nodeIds, params, fileKey, signal);
   }
 
   listConnectedFiles(): ConnectedFile[] | undefined {

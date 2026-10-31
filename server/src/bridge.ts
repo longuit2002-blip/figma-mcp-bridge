@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
+import { bridgeTimeoutMs } from "./types.js";
 import type { BridgeRequest, BridgeResponse, ConnectedFile } from "./types.js";
 
 interface PendingRequest {
@@ -9,6 +10,9 @@ interface PendingRequest {
   timeout: ReturnType<typeof setTimeout>;
   ws: WebSocket;
 }
+
+const formatDuration = (ms: number): string =>
+  ms >= 60_000 ? `${ms / 60_000} minutes` : `${ms / 1000} seconds`;
 
 interface ConnectionEntry {
   ws: WebSocket;
@@ -169,27 +173,38 @@ export class Bridge {
     }));
   }
 
-  send(requestType: string, nodeIds?: string[], fileKey?: string): Promise<BridgeResponse> {
-    return this.sendWithParams(requestType, nodeIds, undefined, fileKey);
+  send(
+    requestType: string,
+    nodeIds?: string[],
+    fileKey?: string,
+    signal?: AbortSignal
+  ): Promise<BridgeResponse> {
+    return this.sendWithParams(requestType, nodeIds, undefined, fileKey, signal);
   }
 
   sendWithParams(
     requestType: string,
     nodeIds?: string[],
     params?: Record<string, unknown>,
-    fileKey?: string
+    fileKey?: string,
+    signal?: AbortSignal
   ): Promise<BridgeResponse> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, rejectRequest) => {
+      if (signal?.aborted) {
+        rejectRequest(new Error("Request aborted"));
+        return;
+      }
+
       let conn: WebSocket;
       try {
         conn = this.resolveConnection(fileKey);
       } catch (err) {
-        reject(err);
+        rejectRequest(err);
         return;
       }
 
       if (conn.readyState !== WebSocket.OPEN) {
-        reject(new Error("Plugin not connected"));
+        rejectRequest(new Error("Plugin not connected"));
         return;
       }
 
@@ -205,12 +220,31 @@ export class Bridge {
         request.params = params;
       }
 
+      const timeoutMs = bridgeTimeoutMs(requestType);
+      const onAbort = () => {
+        clearTimeout(timeout);
+        this.pending.delete(requestId);
+        rejectRequest(new Error("Request aborted"));
+      };
+      const reject = (err: Error) => {
+        signal?.removeEventListener("abort", onAbort);
+        rejectRequest(err);
+      };
       const timeout = setTimeout(() => {
         this.pending.delete(requestId);
-        reject(new Error("Request timed out (3 minutes)"));
-      }, 180_000);
+        reject(new Error(`Request timed out (${formatDuration(timeoutMs)})`));
+      }, timeoutMs);
 
-      this.pending.set(requestId, { resolve, reject, timeout, ws: conn });
+      this.pending.set(requestId, {
+        resolve: (resp) => {
+          signal?.removeEventListener("abort", onAbort);
+          resolve(resp);
+        },
+        reject,
+        timeout,
+        ws: conn,
+      });
+      signal?.addEventListener("abort", onAbort, { once: true });
 
       conn.send(JSON.stringify(request), (err) => {
         if (err) {

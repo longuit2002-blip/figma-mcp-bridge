@@ -141,8 +141,8 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "get_document",
     "Get the current Figma/FigJam page document tree. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_document.shape,
-    async ({ fileKey }): Promise<ToolResult> => {
-      return renderResponse(() => node.send("get_document", undefined, fileKey));
+    async ({ fileKey }, extra): Promise<ToolResult> => {
+      return renderResponse(() => node.send("get_document", undefined, fileKey, extra.signal));
     }
   );
 
@@ -150,8 +150,8 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "get_selection",
     "Get the currently selected nodes in Figma/FigJam. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_selection.shape,
-    async ({ fileKey }): Promise<ToolResult> => {
-      return renderResponse(() => node.send("get_selection", undefined, fileKey));
+    async ({ fileKey }, extra): Promise<ToolResult> => {
+      return renderResponse(() => node.send("get_selection", undefined, fileKey, extra.signal));
     }
   );
 
@@ -159,16 +159,20 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "get_layout_tree",
     "Read absolute node transforms and layout bounds for a capture root. Separate screenshot calls are non-atomic.",
     toolInputSchemas.get_layout_tree.shape,
-    async ({ rootId, maxNodes, fileKey }): Promise<ToolResult> =>
-      renderResponse(() => node.sendWithParams("get_layout_tree", [rootId], { maxNodes }, fileKey))
+    async ({ rootId, maxNodes, fileKey }, extra): Promise<ToolResult> =>
+      renderResponse(() =>
+        node.sendWithParams("get_layout_tree", [rootId], { maxNodes }, fileKey, extra.signal)
+      )
   );
 
   server.tool(
     "get_node",
     "Get a specific Figma/FigJam node by ID. Accepts top-level IDs like '4029:12345' and instance-child IDs like 'I12740:17806;12740:17793'. Never use hyphens. Pass includePrototype: true to also get the prototype interactions on the node and its descendants. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_node.shape,
-    async ({ nodeId, fileKey, ...params }): Promise<ToolResult> => {
-      return renderResponse(() => node.sendWithParams("get_node", [nodeId], params, fileKey));
+    async ({ nodeId, fileKey, ...params }, extra): Promise<ToolResult> => {
+      return renderResponse(() =>
+        node.sendWithParams("get_node", [nodeId], params, fileKey, extra.signal)
+      );
     }
   );
 
@@ -176,13 +180,14 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "get_prototype_connections",
     "Read-only. List the prototype interactions on a node and all its descendants, including instance sublayers. Each reaction is Figma's own trigger and actions (navigate/swap/overlay/scroll-to/change-to, back, close, URL, set variable/mode, conditional blocks, media), with each destination resolved to its name, screen, and page, and variables and modes resolved to names. Also returns the page's flow starting points. Not available in FigJam. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_prototype_connections.shape,
-    async ({ nodeId, fileKey, ...params }): Promise<ToolResult> => {
+    async ({ nodeId, fileKey, ...params }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
         node.sendWithParams(
           "get_prototype_connections",
           nodeId ? [nodeId] : undefined,
           params,
-          fileKey
+          fileKey,
+          extra.signal
         )
       );
     }
@@ -192,9 +197,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "trace_prototype_flow",
     "Read-only. Follow prototype navigation breadth-first from a screen: returns the screens reached (with depth and the node that reached them) and every interaction edge with its source node, trigger, action, enclosing conditional branches, and destination screen. Screens reached again are marked as revisits; unresolvable destinations are listed. Not available in FigJam. When multiple files are connected, specify fileKey.",
     toolInputSchemas.trace_prototype_flow.shape,
-    async ({ nodeId, fileKey, ...params }): Promise<ToolResult> => {
+    async ({ nodeId, fileKey, ...params }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("trace_prototype_flow", [nodeId], params, fileKey)
+        node.sendWithParams("trace_prototype_flow", [nodeId], params, fileKey, extra.signal)
       );
     }
   );
@@ -203,8 +208,8 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "get_styles",
     "Get all local styles in the document. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_styles.shape,
-    async ({ fileKey }): Promise<ToolResult> => {
-      return renderResponse(() => node.send("get_styles", undefined, fileKey));
+    async ({ fileKey }, extra): Promise<ToolResult> => {
+      return renderResponse(() => node.send("get_styles", undefined, fileKey, extra.signal));
     }
   );
 
@@ -212,8 +217,8 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "get_metadata",
     "Get metadata about the current Figma/FigJam document including file name, pages, and current page info. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_metadata.shape,
-    async ({ fileKey }): Promise<ToolResult> => {
-      return renderResponse(() => node.send("get_metadata", undefined, fileKey));
+    async ({ fileKey }, extra): Promise<ToolResult> => {
+      return renderResponse(() => node.send("get_metadata", undefined, fileKey, extra.signal));
     }
   );
 
@@ -221,13 +226,13 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "get_design_context",
     "Get the design context for the current selection or page. Returns a summarized tree structure optimized for understanding the current design context. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_design_context.shape,
-    async ({ depth, fileKey }): Promise<ToolResult> => {
+    async ({ depth, fileKey }, extra): Promise<ToolResult> => {
       const params: Record<string, unknown> = {};
       if (depth !== undefined && depth > 0) {
         params.depth = depth;
       }
       return renderResponse(() =>
-        node.sendWithParams("get_design_context", undefined, params, fileKey)
+        node.sendWithParams("get_design_context", undefined, params, fileKey, extra.signal)
       );
     }
   );
@@ -236,8 +241,8 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "get_variable_defs",
     "Get all local variable definitions including variable collections, modes, and variable values. Variables are Figma's system for design tokens (colors, numbers, strings, booleans). When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_variable_defs.shape,
-    async ({ fileKey }): Promise<ToolResult> => {
-      return renderResponse(() => node.send("get_variable_defs", undefined, fileKey));
+    async ({ fileKey }, extra): Promise<ToolResult> => {
+      return renderResponse(() => node.send("get_variable_defs", undefined, fileKey, extra.signal));
     }
   );
 
@@ -245,12 +250,14 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "get_screenshot",
     "Export a screenshot of the selected nodes or specific nodes by ID. Returns base64-encoded image data. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_screenshot.shape,
-    async ({ nodeIds, format, scale, clip, fileKey }): Promise<ToolResult> => {
+    async ({ nodeIds, format, scale, clip, fileKey }, extra): Promise<ToolResult> => {
       const params: Record<string, unknown> = {};
       if (format) params.format = format;
       if (scale !== undefined && scale > 0) params.scale = scale;
       if (clip !== undefined) params.clip = clip;
-      return renderResponse(() => node.sendWithParams("get_screenshot", nodeIds, params, fileKey));
+      return renderResponse(() =>
+        node.sendWithParams("get_screenshot", nodeIds, params, fileKey, extra.signal)
+      );
     }
   );
 
@@ -258,9 +265,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "set_node_visibility",
     "Show or hide specific Figma nodes. Returns previous visibility for each node so you can restore them after. Useful for isolating a single layer before exporting: hide all siblings, export the frame, then restore visibility.",
     toolInputSchemas.set_node_visibility.shape,
-    async ({ items, fileKey }): Promise<ToolResult> => {
+    async ({ items, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("set_node_visibility", undefined, { items }, fileKey)
+        node.sendWithParams("set_node_visibility", undefined, { items }, fileKey, extra.signal)
       );
     }
   );
@@ -269,12 +276,12 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "set_text_content",
     "Update the contents of a text node. Works on TEXT nodes plus FigJam STICKY and SHAPE_WITH_TEXT nodes (their text sublayer). The plugin loads the node's fonts before applying the new text. Accepts either text or characters. When multiple files are connected, specify fileKey.",
     setTextContentShape.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.set_text_content, args);
       if (!parsed.success) return parsed.error;
       const { nodeId, text, fileKey } = parsed.data;
       return renderResponse(() =>
-        node.sendWithParams("set_text_content", [nodeId], { text }, fileKey)
+        node.sendWithParams("set_text_content", [nodeId], { text }, fileKey, extra.signal)
       );
     }
   );
@@ -283,12 +290,12 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "set_text_properties",
     "Patch common text properties such as font family/style, size, line height, letter spacing, and fill color, plus alignment, auto-resize, and bounds on TEXT nodes. Also targets FigJam STICKY and SHAPE_WITH_TEXT text sublayers (alignment/auto-resize are TEXT-only). When multiple files are connected, specify fileKey.",
     setTextPropertiesShape.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(setTextPropertiesInput, args);
       if (!parsed.success) return parsed.error;
       const { nodeId, fileKey, ...properties } = parsed.data;
       return renderResponse(() =>
-        node.sendWithParams("set_text_properties", [nodeId], properties, fileKey)
+        node.sendWithParams("set_text_properties", [nodeId], properties, fileKey, extra.signal)
       );
     }
   );
@@ -297,13 +304,13 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "set_node_properties",
     "Patch common node properties such as name, position, size, visibility, opacity, and corner radius. Accepts either a single nodeId or a nodeIds array to apply the same changes to multiple nodes in one call. Only supported properties for the target node type may be changed. Use set_solid_fill or set_gradient_fill to change paints. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     setNodePropertiesShape.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.set_node_properties, args);
       if (!parsed.success) return parsed.error;
       const { nodeId, nodeIds, fileKey, ...properties } = parsed.data;
       const ids = nodeIds ?? (nodeId !== undefined ? [nodeId] : []);
       return renderResponse(() =>
-        node.sendWithParams("set_node_properties", ids, properties, fileKey)
+        node.sendWithParams("set_node_properties", ids, properties, fileKey, extra.signal)
       );
     }
   );
@@ -312,11 +319,13 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "set_solid_fill",
     "Replace a node's fill (or stroke) with a single solid paint. Provide a hex color and optional paint opacity — fillHex/fillOpacity are accepted as aliases. Use set_gradient_fill for gradient paints.",
     setSolidFillShape.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(setSolidFillInput, args);
       if (!parsed.success) return parsed.error;
       const { nodeId, fileKey, ...params } = parsed.data;
-      return renderResponse(() => node.sendWithParams("set_solid_fill", [nodeId], params, fileKey));
+      return renderResponse(() =>
+        node.sendWithParams("set_solid_fill", [nodeId], params, fileKey, extra.signal)
+      );
     }
   );
 
@@ -324,9 +333,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "set_gradient_fill",
     "Replace a node's fill (or stroke) with a gradient paint. Provide ordered stops (position 0..1, hex color, optional alpha) and an optional 2x3 gradientTransform matching Figma's gradientTransform format. Useful for setting linear/radial/angular/diamond gradients programmatically.",
     setGradientFillInput.shape,
-    async ({ nodeId, fileKey, ...params }): Promise<ToolResult> => {
+    async ({ nodeId, fileKey, ...params }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("set_gradient_fill", [nodeId], params, fileKey)
+        node.sendWithParams("set_gradient_fill", [nodeId], params, fileKey, extra.signal)
       );
     }
   );
@@ -335,11 +344,13 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "set_effects",
     "Replace a node's effects list (drop/inner shadows, layer/background blurs). Pass an empty array to clear all effects. Each entry mirrors the shape returned by get_node's `effects` field.",
     setEffectsShape.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(setEffectsInput, args);
       if (!parsed.success) return parsed.error;
       const { nodeId, fileKey, ...params } = parsed.data;
-      return renderResponse(() => node.sendWithParams("set_effects", [nodeId], params, fileKey));
+      return renderResponse(() =>
+        node.sendWithParams("set_effects", [nodeId], params, fileKey, extra.signal)
+      );
     }
   );
 
@@ -347,12 +358,12 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "set_stroke_properties",
     "Patch stroke geometry properties: weight, align, dash pattern, cap, join. Use set_solid_fill/set_gradient_fill with target='stroke' to set the paint itself.",
     setStrokePropertiesInput.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.set_stroke_properties, args);
       if (!parsed.success) return parsed.error;
       const { nodeId, fileKey, ...params } = parsed.data;
       return renderResponse(() =>
-        node.sendWithParams("set_stroke_properties", [nodeId], params, fileKey)
+        node.sendWithParams("set_stroke_properties", [nodeId], params, fileKey, extra.signal)
       );
     }
   );
@@ -361,12 +372,12 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "set_auto_layout",
     "Configure auto-layout on a frame: direction, gap, padding, alignment, sizing modes, wrap. Set layoutMode='NONE' to disable auto-layout on the frame. Not supported on SECTION nodes (Figma's API has no section auto-layout).",
     setAutoLayoutInput.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.set_auto_layout, args);
       if (!parsed.success) return parsed.error;
       const { nodeId, fileKey, ...params } = parsed.data;
       return renderResponse(() =>
-        node.sendWithParams("set_auto_layout", [nodeId], params, fileKey)
+        node.sendWithParams("set_auto_layout", [nodeId], params, fileKey, extra.signal)
       );
     }
   );
@@ -375,11 +386,13 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "create_page",
     "Create a new page in the Figma document, optionally naming it and switching the editor to it. Returns the new page's ID, which can be passed as parentId to create_frame / create_text / create_shape / create_image to author content on that page. When multiple files are connected, specify fileKey.",
     createPageInput.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.create_page, args);
       if (!parsed.success) return parsed.error;
       const { fileKey, ...params } = parsed.data;
-      return renderResponse(() => node.sendWithParams("create_page", undefined, params, fileKey));
+      return renderResponse(() =>
+        node.sendWithParams("create_page", undefined, params, fileKey, extra.signal)
+      );
     }
   );
 
@@ -387,11 +400,13 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "create_frame",
     "Create a new frame, optionally inside a specified parent. You can set name, size, position, and a solid fill. When multiple files are connected, specify fileKey.",
     createFrameInput.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.create_frame, args);
       if (!parsed.success) return parsed.error;
       const { fileKey, ...params } = parsed.data;
-      return renderResponse(() => node.sendWithParams("create_frame", undefined, params, fileKey));
+      return renderResponse(() =>
+        node.sendWithParams("create_frame", undefined, params, fileKey, extra.signal)
+      );
     }
   );
 
@@ -399,12 +414,12 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "create_section",
     "Create a new section — a named container with its own background, resizable independently of its contents. Works in Figma and FigJam. When multiple files are connected, specify fileKey.",
     createSectionShape.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.create_section, args);
       if (!parsed.success) return parsed.error;
       const { fileKey, ...params } = parsed.data;
       return renderResponse(() =>
-        node.sendWithParams("create_section", undefined, params, fileKey)
+        node.sendWithParams("create_section", undefined, params, fileKey, extra.signal)
       );
     }
   );
@@ -413,11 +428,13 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "create_text",
     "Create a new text node, optionally inside a specified parent. You can set its content, font, size, alignment, color, position, and bounds. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     createTextShape.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(createTextInput, args);
       if (!parsed.success) return parsed.error;
       const { fileKey, ...params } = parsed.data;
-      return renderResponse(() => node.sendWithParams("create_text", undefined, params, fileKey));
+      return renderResponse(() =>
+        node.sendWithParams("create_text", undefined, params, fileKey, extra.signal)
+      );
     }
   );
 
@@ -425,11 +442,13 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "create_shape",
     "Create a rectangle, ellipse, or line, optionally inside a specified parent. You can set its size, position, rotation, fill, and stroke. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     createShapeShape.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(createShapeInput, args);
       if (!parsed.success) return parsed.error;
       const { fileKey, ...params } = parsed.data;
-      return renderResponse(() => node.sendWithParams("create_shape", undefined, params, fileKey));
+      return renderResponse(() =>
+        node.sendWithParams("create_shape", undefined, params, fileKey, extra.signal)
+      );
     }
   );
 
@@ -437,12 +456,12 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "create_shape_with_text",
     "Create a FigJam shape that carries its own text label (SHAPE_WITH_TEXT), e.g. ROUNDED_RECTANGLE, DIAMOND, or ENG_DATABASE. You can set its shape type, text (and text fill via textFillHex), fill, stroke, position, and size. Only available in FigJam. When multiple files are connected, specify fileKey.",
     createShapeWithTextShape.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(createShapeWithTextInput, args);
       if (!parsed.success) return parsed.error;
       const { fileKey, ...params } = parsed.data;
       return renderResponse(() =>
-        node.sendWithParams("create_shape_with_text", undefined, params, fileKey)
+        node.sendWithParams("create_shape_with_text", undefined, params, fileKey, extra.signal)
       );
     }
   );
@@ -451,11 +470,17 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "create_image",
     "Create an image-backed rectangle from a local file path, remote URL, or data URI. You can set its parent, position, size, corner radius, and fit mode. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     createImageInput.shape,
-    async ({ source, fileKey, ...params }): Promise<ToolResult> => {
+    async ({ source, fileKey, ...params }, extra): Promise<ToolResult> => {
       try {
         const imageBase64 = await loadImageSourceAsBase64(source, process.cwd());
         return await renderResponse(() =>
-          node.sendWithParams("create_image", undefined, { ...params, imageBase64 }, fileKey)
+          node.sendWithParams(
+            "create_image",
+            undefined,
+            { ...params, imageBase64 },
+            fileKey,
+            extra.signal
+          )
         );
       } catch (err) {
         return {
@@ -475,11 +500,17 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "create_svg",
     "Insert raw SVG markup or a workspace-local SVG file as editable Figma vector layers using figma.createNodeFromSvg. You can set its parent, position, size, and semantic name. When multiple files are connected, specify fileKey.",
     createSvgInput.shape,
-    async ({ source, fileKey, ...params }): Promise<ToolResult> => {
+    async ({ source, fileKey, ...params }, extra): Promise<ToolResult> => {
       try {
         const svgText = await loadSvgSource(source, process.cwd());
         return await renderResponse(() =>
-          node.sendWithParams("create_svg", undefined, { ...params, svgText }, fileKey)
+          node.sendWithParams(
+            "create_svg",
+            undefined,
+            { ...params, svgText },
+            fileKey,
+            extra.signal
+          )
         );
       } catch (err) {
         return {
@@ -499,11 +530,17 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "import_html_layers",
     "Import a DOM serialization (JSON produced by html-figma's browser htmlToFigma()) as editable Figma layers inside a new wrapper frame — frames, text, rectangles, and SVG vectors in one call. Source must be a JSON file path inside the MCP server working directory. Optionally append the wrapper into an existing frame/section via parentId. Requires the plugin to be open in the design editor. When multiple files are connected, specify fileKey.",
     importHtmlLayersInput.shape,
-    async ({ source, fileKey, ...params }): Promise<ToolResult> => {
+    async ({ source, fileKey, ...params }, extra): Promise<ToolResult> => {
       try {
         const layers = await loadLayersJson(source, process.cwd());
         return await renderResponse(() =>
-          node.sendWithParams("import_html_layers", undefined, { ...params, layers }, fileKey)
+          node.sendWithParams(
+            "import_html_layers",
+            undefined,
+            { ...params, layers },
+            fileKey,
+            extra.signal
+          )
         );
       } catch (err) {
         return {
@@ -523,11 +560,13 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "create_sticky",
     "Create a new sticky note in FigJam. You can set its text content, position, and whether it uses the wide shape (isWideWidth). Only available in FigJam. When multiple files are connected, specify fileKey.",
     toolInputSchemas.create_sticky.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.create_sticky, args);
       if (!parsed.success) return parsed.error;
       const { fileKey, ...params } = parsed.data;
-      return renderResponse(() => node.sendWithParams("create_sticky", undefined, params, fileKey));
+      return renderResponse(() =>
+        node.sendWithParams("create_sticky", undefined, params, fileKey, extra.signal)
+      );
     }
   );
 
@@ -535,12 +574,12 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "create_connector",
     "Create a connector between two nodes in FigJam. You can specify start/end node IDs or absolute positions, plus the attachment side on each node (startAnchor/endAnchor: top, bottom, left, right, auto). Only available in FigJam. When multiple files are connected, specify fileKey.",
     createConnectorBase.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.create_connector, args);
       if (!parsed.success) return parsed.error;
       const { fileKey, ...params } = parsed.data;
       return renderResponse(() =>
-        node.sendWithParams("create_connector", undefined, params, fileKey)
+        node.sendWithParams("create_connector", undefined, params, fileKey, extra.signal)
       );
     }
   );
@@ -549,9 +588,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "duplicate_nodes",
     "Duplicate one or more nodes in place. The duplicates remain under the same parent as the originals. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     toolInputSchemas.duplicate_nodes.shape,
-    async ({ nodeIds, fileKey }): Promise<ToolResult> => {
+    async ({ nodeIds, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("duplicate_nodes", nodeIds, undefined, fileKey)
+        node.sendWithParams("duplicate_nodes", nodeIds, undefined, fileKey, extra.signal)
       );
     }
   );
@@ -560,9 +599,15 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "duplicate_with_offset",
     "Duplicate nodes and move each duplicate by a fixed offset in one call. Returns the mapping from source node IDs to duplicate node IDs. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     duplicateWithOffsetInput.shape,
-    async ({ nodeIds, offsetX, offsetY, fileKey }): Promise<ToolResult> => {
+    async ({ nodeIds, offsetX, offsetY, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("duplicate_with_offset", nodeIds, { offsetX, offsetY }, fileKey)
+        node.sendWithParams(
+          "duplicate_with_offset",
+          nodeIds,
+          { offsetX, offsetY },
+          fileKey,
+          extra.signal
+        )
       );
     }
   );
@@ -571,9 +616,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "fit_to_content",
     "Resize a SECTION so it tightly wraps its children with optional padding: children are shifted so their bounding box starts at the padding, then the section is resized to bbox + 2×padding. SECTION nodes only — Figma's API has no equivalent for other containers. Works in Figma and FigJam. When multiple files are connected, specify fileKey.",
     fitToContentInput.shape,
-    async ({ nodeId, padding, fileKey }): Promise<ToolResult> => {
+    async ({ nodeId, padding, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("fit_to_content", [nodeId], { padding }, fileKey)
+        node.sendWithParams("fit_to_content", [nodeId], { padding }, fileKey, extra.signal)
       );
     }
   );
@@ -582,9 +627,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "distribute_horizontally",
     "Space three or more nodes with equal horizontal gaps, keeping the leftmost and rightmost nodes fixed. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     distributeInput.shape,
-    async ({ nodeIds, fileKey }): Promise<ToolResult> => {
+    async ({ nodeIds, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("distribute_horizontally", nodeIds, undefined, fileKey)
+        node.sendWithParams("distribute_horizontally", nodeIds, undefined, fileKey, extra.signal)
       );
     }
   );
@@ -593,9 +638,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "distribute_vertically",
     "Space three or more nodes with equal vertical gaps, keeping the topmost and bottommost nodes fixed. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     distributeInput.shape,
-    async ({ nodeIds, fileKey }): Promise<ToolResult> => {
+    async ({ nodeIds, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("distribute_vertically", nodeIds, undefined, fileKey)
+        node.sendWithParams("distribute_vertically", nodeIds, undefined, fileKey, extra.signal)
       );
     }
   );
@@ -604,9 +649,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "align_to_grid",
     "Snap each node's x/y position to a grid of the given size. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     alignToGridInput.shape,
-    async ({ nodeIds, gridSize, fileKey }): Promise<ToolResult> => {
+    async ({ nodeIds, gridSize, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("align_to_grid", nodeIds, { gridSize }, fileKey)
+        node.sendWithParams("align_to_grid", nodeIds, { gridSize }, fileKey, extra.signal)
       );
     }
   );
@@ -615,9 +660,15 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "place_below",
     "Move a node directly below a reference node with an optional gap and start/center alignment across the reference's width. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     placeBelowInput.shape,
-    async ({ nodeId, relativeToId, gap, align, fileKey }): Promise<ToolResult> => {
+    async ({ nodeId, relativeToId, gap, align, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("place_below", [nodeId], { relativeToId, gap, align }, fileKey)
+        node.sendWithParams(
+          "place_below",
+          [nodeId],
+          { relativeToId, gap, align },
+          fileKey,
+          extra.signal
+        )
       );
     }
   );
@@ -626,9 +677,15 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "place_right_of",
     "Move a node directly to the right of a reference node with an optional gap and start/center alignment across the reference's height. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     placeRightOfInput.shape,
-    async ({ nodeId, relativeToId, gap, align, fileKey }): Promise<ToolResult> => {
+    async ({ nodeId, relativeToId, gap, align, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("place_right_of", [nodeId], { relativeToId, gap, align }, fileKey)
+        node.sendWithParams(
+          "place_right_of",
+          [nodeId],
+          { relativeToId, gap, align },
+          fileKey,
+          extra.signal
+        )
       );
     }
   );
@@ -637,9 +694,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "reparent_nodes",
     "Move one or more nodes into a different parent container. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     toolInputSchemas.reparent_nodes.shape,
-    async ({ nodeIds, parentId, fileKey }): Promise<ToolResult> => {
+    async ({ nodeIds, parentId, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("reparent_nodes", nodeIds, { parentId }, fileKey)
+        node.sendWithParams("reparent_nodes", nodeIds, { parentId }, fileKey, extra.signal)
       );
     }
   );
@@ -648,8 +705,10 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "group_nodes",
     "Wrap a list of nodes in a new group. Nodes must share a common parent (or supply parentId explicitly). Returns the new group's node ID.",
     groupNodesInput.shape,
-    async ({ nodeIds, fileKey, ...params }): Promise<ToolResult> => {
-      return renderResponse(() => node.sendWithParams("group_nodes", nodeIds, params, fileKey));
+    async ({ nodeIds, fileKey, ...params }, extra): Promise<ToolResult> => {
+      return renderResponse(() =>
+        node.sendWithParams("group_nodes", nodeIds, params, fileKey, extra.signal)
+      );
     }
   );
 
@@ -657,9 +716,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "ungroup_node",
     "Ungroup a group or frame — its children move up to its parent and the wrapper is removed. Returns the IDs of the orphaned children in their new parent.",
     ungroupNodeInput.shape,
-    async ({ nodeId, fileKey }): Promise<ToolResult> => {
+    async ({ nodeId, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("ungroup_node", [nodeId], undefined, fileKey)
+        node.sendWithParams("ungroup_node", [nodeId], undefined, fileKey, extra.signal)
       );
     }
   );
@@ -668,9 +727,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "set_selection",
     "Set the current page selection to a list of node IDs. Pass an empty array to clear the selection. Works in Figma design editor, Dev Mode, and FigJam.",
     setSelectionInput.shape,
-    async ({ nodeIds, fileKey }): Promise<ToolResult> => {
+    async ({ nodeIds, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("set_selection", nodeIds, undefined, fileKey)
+        node.sendWithParams("set_selection", nodeIds, undefined, fileKey, extra.signal)
       );
     }
   );
@@ -679,9 +738,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "scroll_and_zoom_into_view",
     "Scroll and zoom the Figma/FigJam viewport so the given nodes are framed in view. Works in Figma design editor, Dev Mode, and FigJam.",
     scrollAndZoomIntoViewInput.shape,
-    async ({ nodeIds, fileKey }): Promise<ToolResult> => {
+    async ({ nodeIds, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("scroll_and_zoom_into_view", nodeIds, undefined, fileKey)
+        node.sendWithParams("scroll_and_zoom_into_view", nodeIds, undefined, fileKey, extra.signal)
       );
     }
   );
@@ -690,9 +749,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "delete_nodes",
     "Delete one or more nodes. This is destructive and requires confirm: true. Page and document nodes cannot be deleted through this tool. Works in both Figma and FigJam. When multiple files are connected, specify fileKey.",
     toolInputSchemas.delete_nodes.shape,
-    async ({ nodeIds, confirm, fileKey }): Promise<ToolResult> => {
+    async ({ nodeIds, confirm, fileKey }, extra): Promise<ToolResult> => {
       return renderResponse(() =>
-        node.sendWithParams("delete_nodes", nodeIds, { confirm }, fileKey)
+        node.sendWithParams("delete_nodes", nodeIds, { confirm }, fileKey, extra.signal)
       );
     }
   );
@@ -702,9 +761,9 @@ export function registerTools(server: McpServer, node: Node, port: number): void
       "run_script",
       "Run Plugin API JavaScript in the Figma plugin sandbox. The code is the body of an async function with `figma` in scope; `return` a JSON-serializable value. Calls to .remove() are rejected unless allowRemove is true. Prefer batching related edits into one script. When multiple files are connected, specify fileKey.",
       toolInputSchemas.run_script.shape,
-      async ({ code, allowRemove, fileKey }): Promise<ToolResult> => {
+      async ({ code, allowRemove, fileKey }, extra): Promise<ToolResult> => {
         return renderResponse(() =>
-          node.sendWithParams("run_script", undefined, { code, allowRemove }, fileKey)
+          node.sendWithParams("run_script", undefined, { code, allowRemove }, fileKey, extra.signal)
         );
       }
     );
@@ -714,8 +773,8 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "get_motion_styles",
     "List all available animation presets in Figma (Motion API beta). When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_motion_styles.shape,
-    async ({ fileKey }): Promise<ToolResult> => {
-      return renderResponse(() => node.send("get_motion_styles", undefined, fileKey));
+    async ({ fileKey }, extra): Promise<ToolResult> => {
+      return renderResponse(() => node.send("get_motion_styles", undefined, fileKey, extra.signal));
     }
   );
 
@@ -723,8 +782,8 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "get_node_motion",
     "Read a node's current animationStyles, animations, manualKeyframeTracks, and timelines (Motion API beta). When multiple files are connected, specify fileKey.",
     toolInputSchemas.get_node_motion.shape,
-    async ({ nodeId, fileKey }): Promise<ToolResult> => {
-      return renderResponse(() => node.send("get_node_motion", [nodeId], fileKey));
+    async ({ nodeId, fileKey }, extra): Promise<ToolResult> => {
+      return renderResponse(() => node.send("get_node_motion", [nodeId], fileKey, extra.signal));
     }
   );
 
@@ -732,12 +791,12 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "apply_animation_style",
     "Apply a preset animation style to a node (Motion API beta). When multiple files are connected, specify fileKey.",
     toolInputSchemas.apply_animation_style.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.apply_animation_style, args);
       if (!parsed.success) return parsed.error;
       const { nodeId, fileKey, ...properties } = parsed.data;
       return renderResponse(() =>
-        node.sendWithParams("apply_animation_style", [nodeId], properties, fileKey)
+        node.sendWithParams("apply_animation_style", [nodeId], properties, fileKey, extra.signal)
       );
     }
   );
@@ -746,12 +805,12 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "remove_animation_style",
     "Remove an applied animation style from a node (Motion API beta). If no animationStyleId is provided, removes all styles. When multiple files are connected, specify fileKey.",
     toolInputSchemas.remove_animation_style.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.remove_animation_style, args);
       if (!parsed.success) return parsed.error;
       const { nodeId, fileKey, ...properties } = parsed.data;
       return renderResponse(() =>
-        node.sendWithParams("remove_animation_style", [nodeId], properties, fileKey)
+        node.sendWithParams("remove_animation_style", [nodeId], properties, fileKey, extra.signal)
       );
     }
   );
@@ -760,12 +819,18 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "apply_manual_keyframe_track",
     "Applies or replaces the manual Motion keyframe track for a property, paint, or effect field on a node. When multiple files are connected, specify fileKey.",
     toolInputSchemas.apply_manual_keyframe_track.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.apply_manual_keyframe_track, args);
       if (!parsed.success) return parsed.error;
       const { nodeId, fileKey, ...properties } = parsed.data;
       return renderResponse(() =>
-        node.sendWithParams("apply_manual_keyframe_track", [nodeId], properties, fileKey)
+        node.sendWithParams(
+          "apply_manual_keyframe_track",
+          [nodeId],
+          properties,
+          fileKey,
+          extra.signal
+        )
       );
     }
   );
@@ -774,12 +839,18 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "remove_manual_keyframe_track",
     "Removes the manual Motion keyframe track for a property, paint, or effect field on a node. When multiple files are connected, specify fileKey.",
     toolInputSchemas.remove_manual_keyframe_track.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.remove_manual_keyframe_track, args);
       if (!parsed.success) return parsed.error;
       const { nodeId, fileKey, ...properties } = parsed.data;
       return renderResponse(() =>
-        node.sendWithParams("remove_manual_keyframe_track", [nodeId], properties, fileKey)
+        node.sendWithParams(
+          "remove_manual_keyframe_track",
+          [nodeId],
+          properties,
+          fileKey,
+          extra.signal
+        )
       );
     }
   );
@@ -788,12 +859,12 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "set_timeline_duration",
     "Sets the duration (in seconds) for a timeline. When multiple files are connected, specify fileKey.",
     toolInputSchemas.set_timeline_duration.shape,
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parsed = parseToolInput(toolInputSchemas.set_timeline_duration, args);
       if (!parsed.success) return parsed.error;
       const { nodeId, fileKey, ...properties } = parsed.data;
       return renderResponse(() =>
-        node.sendWithParams("set_timeline_duration", [nodeId], properties, fileKey)
+        node.sendWithParams("set_timeline_duration", [nodeId], properties, fileKey, extra.signal)
       );
     }
   );
@@ -802,12 +873,12 @@ export function registerTools(server: McpServer, node: Node, port: number): void
     "save_screenshots",
     "Export screenshots for multiple nodes and save them directly to the local filesystem. Returns metadata only (no base64). When multiple files are connected, specify fileKey.",
     toolInputSchemas.save_screenshots.shape,
-    async ({ items, format, scale, clip, fileKey }): Promise<ToolResult> => {
+    async ({ items, format, scale, clip, fileKey }, extra): Promise<ToolResult> => {
       try {
         // Create a sender bound to the specific fileKey
         const sender: ScreenshotSender = {
           sendWithParams: (requestType, nodeIds, params) =>
-            node.sendWithParams(requestType, nodeIds, params, fileKey),
+            node.sendWithParams(requestType, nodeIds, params, fileKey, extra.signal),
         };
         const result = await executeSaveScreenshots(sender, items, format, scale, clip);
         return {

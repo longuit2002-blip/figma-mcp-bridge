@@ -1,3 +1,4 @@
+import { followerTimeoutMs } from "./types.js";
 import type { BridgeResponse, ConnectedFile, RPCRequest, RPCResponse } from "./types.js";
 
 /**
@@ -6,26 +7,33 @@ import type { BridgeResponse, ConnectedFile, RPCRequest, RPCResponse } from "./t
 export class Follower {
   constructor(private leaderUrl: string) {}
 
-  send(requestType: string, nodeIds?: string[], fileKey?: string): Promise<BridgeResponse> {
-    return this.sendWithParams(requestType, nodeIds, undefined, fileKey);
+  send(
+    requestType: string,
+    nodeIds?: string[],
+    fileKey?: string,
+    signal?: AbortSignal
+  ): Promise<BridgeResponse> {
+    return this.sendWithParams(requestType, nodeIds, undefined, fileKey, signal);
   }
 
   async sendWithParams(
     requestType: string,
     nodeIds?: string[],
     params?: Record<string, unknown>,
-    fileKey?: string
+    fileKey?: string,
+    signal?: AbortSignal
   ): Promise<BridgeResponse> {
     const rpcReq: RPCRequest = { tool: requestType };
     if (nodeIds && nodeIds.length > 0) rpcReq.nodeIds = nodeIds;
     if (params && Object.keys(params).length > 0) rpcReq.params = params;
     if (fileKey) rpcReq.fileKey = fileKey;
 
+    const timeoutSignal = AbortSignal.timeout(followerTimeoutMs(requestType));
     const response = await fetch(`${this.leaderUrl}/rpc`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(rpcReq),
-      signal: AbortSignal.timeout(210_000),
+      signal: signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal,
     });
 
     if (!response.ok) {
