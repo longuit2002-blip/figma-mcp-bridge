@@ -52,8 +52,6 @@ type PluginStatus = {
   selectionCount: number;
 };
 
-const MAX_QUEUED_RESPONSES = 50;
-
 // `||` (not `??`) so an empty build-time value falls back to the default.
 // A custom endpoint must also be listed in manifest.json's
 // networkAccess.allowedDomains or Figma will block the connection.
@@ -69,7 +67,6 @@ export default function App() {
   });
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<number | null>(null);
-  const queuedResponses = useRef<string[]>([]);
 
   const statusLabel = useMemo(
     () => (connected ? "WebSocket Connected" : "Disconnected"),
@@ -104,14 +101,10 @@ export default function App() {
         return;
       }
 
-      const payload = JSON.stringify(msg);
       if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-        queuedResponses.current = [...queuedResponses.current, payload].slice(
-          -MAX_QUEUED_RESPONSES
-        );
         return;
       }
-      socketRef.current.send(payload);
+      socketRef.current.send(JSON.stringify(msg));
     };
 
     window.addEventListener("message", handleMessage);
@@ -155,9 +148,6 @@ export default function App() {
 
       ws.onopen = () => {
         setConnected(true);
-        const queued = queuedResponses.current;
-        queuedResponses.current = [];
-        queued.forEach((payload) => ws.send(payload));
         parent.postMessage({ pluginMessage: { type: "ui-ready" } }, "*");
       };
 
