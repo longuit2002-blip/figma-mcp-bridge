@@ -489,13 +489,60 @@ type PendingNode = { source: SerializableNode; target: SerializedNode; level: nu
 
 const yieldToMainThread = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
+const isLiveAndVisible = (node: SceneNode): boolean => {
+  try {
+    return !node.removed && node.visible !== false;
+  } catch {
+    return false;
+  }
+};
+
 const getVisibleChildren = (node: SerializableNode): readonly SceneNode[] =>
-  "children" in node ? node.children.filter((child) => child.visible !== false) : [];
+  "children" in node ? node.children.filter(isLiveAndVisible) : [];
+
+const trySerializeShallow = (node: SerializableNode, compact: boolean): SerializedNode | null => {
+  try {
+    return node.removed ? null : serializeNodeShallow(node, compact);
+  } catch {
+    return null;
+  }
+};
+
+const expandNode = (
+  { source, target, level }: PendingNode,
+  compact: boolean,
+  limits: TreeLimits,
+  state: { emitted: number },
+  queue: PendingNode[]
+): void => {
+  const children = getVisibleChildren(source);
+  if (children.length === 0) {
+    if (!compact && "children" in source) target.children = [];
+    return;
+  }
+
+  const room = level < limits.depth ? Math.max(0, limits.maxNodes - state.emitted) : 0;
+  const pending = children.slice(0, room).flatMap((child): PendingNode[] => {
+    const serialized = trySerializeShallow(child, compact);
+    return serialized ? [{ source: child, target: serialized, level: level + 1 }] : [];
+  });
+  if (pending.length > 0) {
+    target.children = pending.map((entry) => entry.target);
+    queue.push(...pending);
+    state.emitted += pending.length;
+  }
+  if (room < children.length) {
+    target.childCount = children.length;
+    target.truncated = true;
+  }
+};
 
 /**
  * Serializes `roots` breadth first so a `maxNodes` cut-off trims the deepest
  * levels instead of whole sibling subtrees. A node whose children were left out
  * (by `depth` or `maxNodes`) reports `childCount` and `truncated: true`.
+ * Removed nodes are skipped, and a node that disappears while the walk is
+ * suspended is dropped without failing the call.
  * Yields to the event loop every `YIELD_INTERVAL` nodes to keep Figma responsive.
  */
 export const serializeTree = async (
@@ -503,39 +550,19 @@ export const serializeTree = async (
   compact: boolean,
   limits: TreeLimits
 ): Promise<SerializedNode[]> => {
-  const targets = roots.map((root) => serializeNodeShallow(root, compact));
-  const queue: PendingNode[] = roots.map((source, index) => ({
-    source,
-    target: targets[index],
-    level: 0,
-  }));
-  let emitted = roots.length;
+  const queue = roots.flatMap((source): PendingNode[] => {
+    const target = trySerializeShallow(source, compact);
+    return target ? [{ source, target, level: 0 }] : [];
+  });
+  const targets = queue.map((entry) => entry.target);
+  const state = { emitted: queue.length };
 
   for (let index = 0; index < queue.length; index++) {
     if (index > 0 && index % YIELD_INTERVAL === 0) await yieldToMainThread();
-
-    const { source, target, level } = queue[index];
-    const children = getVisibleChildren(source);
-    if (children.length === 0) {
-      if (!compact && "children" in source) target.children = [];
+    try {
+      expandNode(queue[index], compact, limits, state, queue);
+    } catch {
       continue;
-    }
-
-    const room = level < limits.depth ? Math.max(0, limits.maxNodes - emitted) : 0;
-    const included = children.slice(0, room);
-    if (included.length > 0) {
-      const pending = included.map((child) => ({
-        source: child,
-        target: serializeNodeShallow(child, compact),
-        level: level + 1,
-      }));
-      target.children = pending.map((entry) => entry.target);
-      queue.push(...pending);
-      emitted += included.length;
-    }
-    if (included.length < children.length) {
-      target.childCount = children.length;
-      target.truncated = true;
     }
   }
 
