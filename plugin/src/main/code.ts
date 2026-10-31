@@ -735,7 +735,11 @@ const handleRequest = async (request: ServerRequest): Promise<PluginResponse> =>
             return {
               ...serialized,
               children: undefined,
-              childCount: visibleChildren.length,
+              ...(compact
+                ? visibleChildren.length > 0
+                  ? { childCount: visibleChildren.length, truncated: true }
+                  : {}
+                : { childCount: visibleChildren.length }),
             };
           }
           return {

@@ -596,12 +596,20 @@ export const serializeTree = async (
   compact: boolean,
   limits: TreeLimits
 ): Promise<TreeResult> => {
-  const queue = roots.flatMap((source): PendingNode[] => {
+  const queue: PendingNode[] = [];
+  let visitedRoots = 0;
+  for (const source of roots) {
+    if (queue.length >= limits.maxNodes) break;
+    visitedRoots++;
     const target = trySerializeShallow(source, compact);
-    return target ? [{ source, target, level: 0 }] : [];
-  });
+    if (target) queue.push({ source, target, level: 0 });
+  }
+  const omittedRoots = roots.length - visitedRoots;
   const nodes = queue.map((entry) => entry.target);
-  const state: WalkState = { emitted: queue.length, reasons: new Set() };
+  const state: WalkState = {
+    emitted: queue.length,
+    reasons: new Set(omittedRoots > 0 ? ["maxNodes"] : []),
+  };
 
   for (let index = 0; index < queue.length; index++) {
     if (index > 0 && index % YIELD_INTERVAL === 0) await yieldToMainThread();
@@ -612,6 +620,6 @@ export const serializeTree = async (
     }
   }
 
-  const truncation = summarizeTruncation(state, 0);
+  const truncation = summarizeTruncation(state, omittedRoots);
   return truncation ? { nodes, truncation } : { nodes };
 };
