@@ -4,6 +4,8 @@ export const COMPACT_LAYOUT_MAX_NODES = 300;
 export const VERBOSE_LAYOUT_MAX_NODES = 2000;
 const MAX_LAYOUT_DEPTH = 100;
 const TRANSLATION_EPSILON = 1e-6;
+const LINEAR_DECIMALS = 4;
+const TRANSLATION_DECIMALS = 2;
 
 type Box = { x: number; y: number; width: number; height: number } | null;
 
@@ -15,6 +17,34 @@ const isPureTranslation = (transform: Transform): boolean => {
     Math.abs(b) < TRANSLATION_EPSILON &&
     Math.abs(c) < TRANSLATION_EPSILON
   );
+};
+
+const roundTo = (value: number, decimals: number): number => {
+  const scale = 10 ** decimals;
+  return Math.round(value * scale) / scale;
+};
+
+const isIdentityLinearPart = ([[a, c], [b, d]]: Transform): boolean =>
+  a === 1 && d === 1 && b === 0 && c === 0;
+
+const roundTransform = (transform: Transform): Transform => {
+  const rounded: Transform = [
+    [
+      roundTo(transform[0][0], LINEAR_DECIMALS),
+      roundTo(transform[0][1], LINEAR_DECIMALS),
+      roundTo(transform[0][2], TRANSLATION_DECIMALS),
+    ],
+    [
+      roundTo(transform[1][0], LINEAR_DECIMALS),
+      roundTo(transform[1][1], LINEAR_DECIMALS),
+      roundTo(transform[1][2], TRANSLATION_DECIMALS),
+    ],
+  ];
+  if (!isIdentityLinearPart(rounded)) return rounded;
+  return [
+    [transform[0][0], transform[0][1], rounded[0][2]],
+    [transform[1][0], transform[1][1], rounded[1][2]],
+  ];
 };
 
 const isSameBox = (first: Box, second: Box): boolean =>
@@ -44,14 +74,16 @@ const buildCompactEntry = (node: SceneNode) => {
     buildVerboseEntry(node);
   const roundedBounds = roundNumbers(absoluteBoundingBox);
   const roundedRenderBounds = roundNumbers(absoluteRenderBounds);
-  return roundNumbers({
-    ...rest,
-    ...(isPureTranslation(absoluteTransform) ? {} : { absoluteTransform }),
+  return {
+    ...roundNumbers(rest),
+    ...(isPureTranslation(absoluteTransform)
+      ? {}
+      : { absoluteTransform: roundTransform(absoluteTransform) }),
     absoluteBoundingBox: roundedBounds,
     ...(isSameBox(roundedRenderBounds, roundedBounds)
       ? {}
       : { absoluteRenderBounds: roundedRenderBounds }),
-  });
+  };
 };
 
 export const collectLayoutNodes = (root: SceneNode, maxNodes: number, compact: boolean) => {
